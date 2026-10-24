@@ -31,3 +31,50 @@ test("todos os sete portais ficam desabilitados sem acesso homologado", async ()
     await assert.rejects(adapter.fetchEvents(context), /desabilitado/);
   }
 });
+import {
+  initialSnapshot,
+  upsertSession,
+  deadlineAlerts,
+  validateSession,
+} from "../src/local.js";
+test("cadastro manual persiste em snapshot serializável e edição não duplica sessão", () => {
+  const initial = initialSnapshot();
+  const session = {
+    ...initial.sessions[0],
+    id: "manual-1",
+    status: "Convocação",
+  };
+  const created = upsertSession(initial, session);
+  assert.equal(created.sessions.length, initial.sessions.length + 1);
+  assert.equal(created.sessions[0].source, "manual");
+  assert.equal(created.events[0].kind, "summons");
+  const restored = JSON.parse(JSON.stringify(created));
+  const updated = upsertSession(restored, { ...session, status: "Em análise" });
+  assert.equal(updated.sessions.length, created.sessions.length);
+  assert.equal(updated.sessions[0].status, "Em análise");
+  assert.equal(initial.sessions.length, 5);
+});
+test("validação rejeita prazo inválido, valor negativo e campo obrigatório vazio", () => {
+  const session = initialSnapshot().sessions[0];
+  assert.throws(() => validateSession({ ...session, deadline: "invalid" }));
+  assert.throws(() => validateSession({ ...session, value: -1 }));
+  assert.throws(() => validateSession({ ...session, number: " " }));
+});
+test("alertas distinguem vencidos e próximos, ignoram encerrados e preservam identidade", () => {
+  const now = Date.now();
+  const initial = initialSnapshot();
+  initial.sessions = [
+    { ...initial.sessions[0], deadline: new Date(now - 60000).toISOString() },
+  ];
+  const alerts = deadlineAlerts(initial, now);
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].title, "Prazo vencido");
+  assert.equal(alerts[0].id, deadlineAlerts(initial, now + 1)[0].id);
+  initial.sessions[0].deadline = new Date(now + 3600000).toISOString();
+  assert.equal(
+    deadlineAlerts(initial, now)[0].title,
+    "Prazo nas próximas 24 horas",
+  );
+  initial.sessions[0].status = "Encerrada";
+  assert.equal(deadlineAlerts(initial, now).length, 0);
+});

@@ -1,7 +1,7 @@
 {
   "name": "r-s---licitabot",
   "version": "1.0.0",
-  "description": "Central de monitoramento de licitações R&S LicitaBot",
+  "description": "Central de monitoramento de licita\u00e7\u00f5es R&S LicitaBot",
   "main": "index.js",
   "scripts": {
     "dev": "concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
@@ -10,7 +10,8 @@
     "check": "tsc --noEmit",
     "test": "tsx --test server/*.test.ts",
     "build": "vite build",
-    "start": "tsx server/index.ts"
+    "start": "tsx server/index.ts",
+    "build:preview": "node scripts/preview.mjs"
   },
   "repository": {
     "type": "git",

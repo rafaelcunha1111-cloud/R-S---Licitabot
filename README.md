@@ -11,7 +11,17 @@ npm ci
 npm run dev
 ```
 
-Vite usa a porta 5173 e encaminha `/api` para Express na porta 3001. Os dados são fictícios e os prazos relativos são gerados em cada consulta. Atualizar o painel reinicia os prazos demonstrativos. As marcações de leitura existem somente na memória do navegador. Horários seguem o fuso do navegador. Não há usuário autenticado, armazenamento persistente, notificações externas ou monitoramento real nesta versão.
+Vite usa a porta 5173 e encaminha `/api` para Express na porta 3001. O dashboard mantém seu workspace em `localStorage`: cadastros, edições e marcações de leitura sobrevivem à recarga no mesmo navegador/origem. Os exemplos são gerados somente na primeira abertura; atualizar o painel não reinicia seus prazos. Limpar os dados do site remove os cadastros locais e recria os exemplos. Não há banco compartilhado nem sincronização entre dispositivos.
+
+**Operacional:** cadastro e edição manual de licitações, busca e filtros, detalhes de sessões, agenda ordenada, alertas internos de convocação registrada manualmente e prazos nas próximas 24h/vencidos, leitura persistente local. Os alertas de prazo são recalculados a cada 30 segundos enquanto a página está aberta. Alertas lidos conservam sua identidade até a edição do prazo. Sessões encerradas não geram alertas de prazo.
+
+**Demonstrativo:** mensagens de pregoeiros e sessões pré-carregadas. **Não implementado:** coleta de sessões públicas/mensagens, autenticação da equipe, integração real com portais, notificações por email/WhatsApp/push ou em segundo plano. Cadastros manuais são identificados como não verificados; não equivalem a dados oficiais. Não utilize credenciais ou dados sensíveis.
+
+## Prévia no navegador
+
+`npm run build:preview` gera `dist-preview/licitabot-preview.html`, um único HTML com JavaScript e CSS incorporados. Baixe e abra no navegador; não depende da API nem consulta portais. Alguns navegadores restringem armazenamento em arquivos locais; nesses casos o painel informa que as alterações não serão persistidas. A prévia foi também validada via HTTP local.
+
+O workflow `.github/workflows/preview.yml` prepara publicação estática no GitHub Pages, sem credenciais de portais e sem segredos personalizados. Para ativar: **Settings → Pages → Build and deployment → Source: GitHub Actions**, e execute o workflow “Prévia do LicitaBot”. A URL publicada será informada pelo próprio job; não considerar o site publicado apenas pelo push do workflow. A hospedagem será pública conforme as configurações/plano do repositório. A prévia usa somente armazenamento local de cada visitante.
 
 ```sh
 npm run check
@@ -36,4 +46,4 @@ Evolução prevista:
 - Separar coleta de entrega de notificações; implementar outbox, tentativas idempotentes, preferências, confirmação de leitura persistente e trilha de auditoria.
 - Reconciliar convocações e prazos com a fonte oficial; distinguir dado desatualizado, erro de coleta e ausência de eventos. A API de demonstração não confirma prazos oficiais.
 
-Os testes atuais verificam o contrato demonstrativo, os sete portais e o bloqueio de conectores não configurados. Integrações reais precisam de testes de contrato e homologação individual com credenciais autorizadas.
+Os cinco testes atuais verificam os contratos, bloqueio de conectores, cadastro/edição, validação e alertas de prazo. Integrações reais precisam de testes de contrato e homologação individual com credenciais autorizadas.

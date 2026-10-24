@@ -961,3 +961,34 @@ a:focus-visible {
     display: none;
   }
 }
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 15px 0;
+  font-size: 12px;
+  color: #647c6e;
+}
+.field input,
+.field select {
+  padding: 10px;
+  border: 1px solid #dce6df;
+  border-radius: 6px;
+  background: #fff;
+  color: #294936;
+  width: 100%;
+  font: inherit;
+}
+.title-row {
+  flex-wrap: wrap;
+}
+.title-row > div {
+  flex: 1;
+  min-width: 250px;
+}
+.modal form .outline {
+  background: #197c60;
+  color: white;
+  width: 100%;
+  margin-top: 10px;
+}
