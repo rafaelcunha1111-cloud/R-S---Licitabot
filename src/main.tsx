@@ -20,6 +20,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import "./style.css";
+import { BackendPanel } from "./BackendPanel";
 import {
   initialSnapshot,
   storageKey,
@@ -123,17 +124,7 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      if (import.meta.env.VITE_STATIC_PREVIEW === "true") {
-        setConnectors(previewConnectors);
-        return;
-      }
-      const responses = await Promise.all([
-        fetch("/api/dashboard"),
-        fetch("/api/connectors"),
-      ]);
-      if (responses.some((r) => !r.ok)) throw Error();
-      await responses[0].json(); // API health only; browser workspace is persisted separately.
-      setConnectors(await responses[1].json());
+      setConnectors(previewConnectors);
     } catch {
       setError(
         "Não foi possível carregar os dados. Verifique a API e tente novamente.",
@@ -160,6 +151,7 @@ function App() {
     ["Alertas", Bell],
     ["Prazos", CalendarDays],
     ["Integrações", Plug],
+    ["Servidor", ShieldCheck],
   ] as const;
   return (
     <div className="shell">
@@ -231,7 +223,10 @@ function App() {
             Workspace <ChevronRight size={14} /> <strong>{page}</strong>
           </div>
           <div className="header-right">
-            <span className="demo-dot" /> Ambiente demonstrativo
+            <span className="demo-dot" />{" "}
+            {page === "Servidor"
+              ? "Servidor • integrações pendentes"
+              : "Workspace local • demonstração"}
             <button
               aria-label="Abrir alertas"
               onClick={() => setPage("Alertas")}
@@ -254,40 +249,48 @@ function App() {
                 Acompanhe suas licitações e fique por dentro de cada movimento.
               </p>
             </div>
-            <button
-              className="outline"
-              onClick={() => {
-                setEditing(null);
-                setFormError("");
-              }}
-            >
-              + Cadastrar licitação
-            </button>
-            <button
-              className="outline"
-              onClick={() => {
-                setTick(Date.now());
-                void load();
-              }}
-              disabled={loading}
-            >
-              <RefreshCw size={15} />
-              {loading ? "Atualizando…" : "Atualizar painel"}
-            </button>
+            {page !== "Servidor" && (
+              <>
+                <button
+                  className="outline"
+                  onClick={() => {
+                    setEditing(null);
+                    setFormError("");
+                  }}
+                >
+                  + Cadastrar licitação
+                </button>
+                <button
+                  className="outline"
+                  onClick={() => {
+                    setTick(Date.now());
+                    void load();
+                  }}
+                  disabled={loading}
+                >
+                  <RefreshCw size={15} />
+                  {loading ? "Atualizando…" : "Atualizar painel"}
+                </button>
+              </>
+            )}
           </div>
-          <div className="demo-banner">
-            <ShieldCheck size={17} />
-            <span>
-              <strong>Protótipo sem conexão aos portais.</strong> Exemplos são
-              fictícios. Cadastros manuais ficam somente neste navegador e não
-              são dados verificados. Não insira credenciais ou informações
-              sensíveis.
-            </span>
-            <button onClick={() => setPage("Integrações")}>
-              Ver integrações <ArrowUpRight size={14} />
-            </button>
-          </div>
-          {storageError && <p role="alert">{storageError}</p>}
+          {page !== "Servidor" && (
+            <div className="demo-banner">
+              <ShieldCheck size={17} />
+              <span>
+                <strong>Protótipo sem conexão aos portais.</strong> Exemplos são
+                fictícios. Cadastros manuais ficam somente neste navegador e não
+                são dados verificados. Não insira credenciais ou informações
+                sensíveis.
+              </span>
+              <button onClick={() => setPage("Integrações")}>
+                Ver integrações <ArrowUpRight size={14} />
+              </button>
+            </div>
+          )}
+          {page !== "Servidor" && storageError && (
+            <p role="alert">{storageError}</p>
+          )}
           {error && (
             <p role="alert">{error} O workspace local continua disponível.</p>
           )}
@@ -595,6 +598,7 @@ function App() {
                   ))}
               </section>
             )}
+            {page === "Servidor" && <BackendPanel />}
             {page === "Integrações" && (
               <div className="connector-grid">
                 {connectors.map((c) => (
@@ -706,7 +710,9 @@ function App() {
             </span>
             <span>
               <span className="demo-dot" />{" "}
-              {data ? "Workspace local • sem coleta real" : "Conectando à API"}
+              {page === "Servidor"
+                ? "Backend • integração pendente"
+                : "Workspace local • sem coleta real"}
             </span>
           </footer>
         </div>

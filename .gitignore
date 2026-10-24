@@ -3,3 +3,12 @@ dist/
 .env
 *.log
 dist-preview/
+
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+backend/dist/

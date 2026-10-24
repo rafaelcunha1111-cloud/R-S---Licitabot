@@ -11,7 +11,8 @@
     "test": "tsx --test server/*.test.ts",
     "build": "vite build",
     "start": "tsx server/index.ts",
-    "build:preview": "node scripts/preview.mjs"
+    "build:preview": "node scripts/preview.mjs",
+    "security:secrets": "node scripts/check-secrets.mjs"
   },
   "repository": {
     "type": "git",

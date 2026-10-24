@@ -47,3 +47,14 @@ Evolução prevista:
 - Reconciliar convocações e prazos com a fonte oficial; distinguir dado desatualizado, erro de coleta e ausência de eventos. A API de demonstração não confirma prazos oficiais.
 
 Os cinco testes atuais verificam os contratos, bloqueio de conectores, cadastro/edição, validação e alertas de prazo. Integrações reais precisam de testes de contrato e homologação individual com credenciais autorizadas.
+
+## Backend persistente e execução contínua
+
+O dashboard existente no Pages foi preservado. A nova aba **Servidor** acessa a API autenticada quando a variável pública `VITE_API_URL` é definida no build; a demonstração continua separada. O diretório `backend/` tem pacote/lockfile próprios, API, worker, migrations PostgreSQL, fila transacional e Dockerfile. Não é necessário manter o navegador aberto para o worker implantado executar.
+
+**Implementado e testado localmente:** autenticação, isolamento de usuários, cadastro manual PostgreSQL, prazos, histórico de consultas, notificações no painel, agendamento conservador de cinco minutos, ingestão/deduplicação por contrato e fila com retries/recibos. **Ainda não ativo:** hospedagem contínua, coleta real de portais e envio externo homologado. Sem conector autorizado, as consultas ficam bloqueadas, com último sucesso vazio; não há simulação de monitoramento real.
+
+- [Implantação Render/Railway, configuração e serviços externos](docs/DEPLOYMENT.md)
+- [Estado e homologação das integrações oficiais](docs/PORTALS.md)
+- [Segurança, testes e pendências](docs/SECURITY.md)
+- [Variáveis do backend, sem segredos](backend/.env.example)

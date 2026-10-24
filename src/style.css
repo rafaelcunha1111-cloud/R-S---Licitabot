@@ -992,3 +992,21 @@ a:focus-visible {
   width: 100%;
   margin-top: 10px;
 }
+
+.backend-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.backend-workspace .info {
+  max-width: none;
+}
+.backend-workspace small {
+  overflow-wrap: anywhere;
+}
+.backend-workspace .message-row {
+  flex-wrap: wrap;
+}
+.backend-workspace .message-row > div {
+  min-width: 220px;
+}

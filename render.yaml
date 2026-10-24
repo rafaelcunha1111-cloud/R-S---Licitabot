@@ -1,0 +1,31 @@
+# Modelo revisável: os planos/custos devem ser conferidos no provedor.
+# Use PostgreSQL gerenciado com backups e uma URL TLS validável no grupo abaixo.
+envVarGroups:
+  - name: licitabot-shared
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_ORIGIN
+        value: https://rafaelcunha1111-cloud.github.io
+services:
+  - type: web
+    name: licitabot-api
+    runtime: docker
+    plan: starter
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    preDeployCommand: node dist/migrate.js
+    healthCheckPath: /health/ready
+    envVars:
+      - fromGroup: licitabot-shared
+  - type: worker
+    name: licitabot-worker
+    runtime: docker
+    plan: starter
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    dockerCommand: node dist/worker.js
+    envVars:
+      - fromGroup: licitabot-shared
