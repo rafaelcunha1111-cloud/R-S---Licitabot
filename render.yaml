@@ -1,5 +1,5 @@
 # Modelo revisável: os planos/custos devem ser conferidos no provedor.
-# Use PostgreSQL gerenciado com backups e uma URL TLS validável no grupo abaixo.
+# Use PostgreSQL gerenciado com backups; URL interna Render ou URL externa com TLS validado.
 envVarGroups:
   - name: licitabot-shared
     envVars:
@@ -7,6 +7,8 @@ envVarGroups:
         value: production
       - key: DATABASE_URL
         sync: false
+      - key: DATABASE_SSL_MODE
+        value: auto
       - key: FRONTEND_ORIGIN
         value: https://rafaelcunha1111-cloud.github.io
 services:

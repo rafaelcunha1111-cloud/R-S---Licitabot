@@ -27,7 +27,7 @@ npm --prefix backend ci
 npm run dev
 ```
 
-O comando de desenvolvimento original mantém a demonstração; para o backend persistente, copie `backend/.env.example` para `backend/.env` (ignorado pelo Git), configure um banco local e use `NODE_ENV=development`. Um banco local pode usar conexão sem TLS apenas no desenvolvimento. No diretório `backend`:
+O comando de desenvolvimento original mantém a demonstração; para o backend persistente, copie `backend/.env.example` para `backend/.env` (ignorado pelo Git), configure um banco local e use `NODE_ENV=development`. Um banco local pode usar conexão sem TLS no desenvolvimento. A rede privada do Render possui uma política interna específica descrita abaixo. No diretório `backend`:
 
 ```sh
 node --env-file=.env --import tsx src/migrate.ts
@@ -42,12 +42,30 @@ Não execute o servidor demonstrativo da raiz e a API persistente na mesma porta
 
 ## Render
 
-1. Provisionar PostgreSQL gerenciado com persistência, backups e URL TLS. Obter CA confiável se a cadeia não estiver no trust store da imagem. Não usar `rejectUnauthorized=false` nem `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+1. Provisionar PostgreSQL gerenciado com persistência e backups. Na mesma rede/região Render, usar a Internal Database URL original com a política interna abaixo. Para URL externa, exigir TLS e obter CA confiável se a cadeia não estiver no trust store da imagem. Não usar `rejectUnauthorized=false` nem `NODE_TLS_REJECT_UNAUTHORIZED=0`.
 2. Criar Blueprint com `render.yaml` ou dois serviços Docker a partir de `backend/Dockerfile`, contexto `backend`. Revisar custos e planos. Preencher `DATABASE_URL` e `FRONTEND_ORIGIN` no grupo compartilhado do cofre/Environment Group.
 3. A API usa `node dist/index.js`; pre-deploy `node dist/migrate.js`; health check `/health/ready`. O worker usa `node dist/worker.js`. As migrations são transacionais e serializadas por advisory lock. Não executar migrations destrutivas em versões futuras sem plano de compatibilidade/backup.
 4. Compartilhar configuração de banco e provedores entre API e worker. As credenciais de envio ficam no worker; segredos de webhook ficam na API. É permitido separar os grupos posteriormente pelo princípio de menor privilégio.
 5. Criar o usuário inicial pelo console seguro do serviço, conforme abaixo. Não existe cadastro público ou conta padrão.
 6. Configurar `VITE_API_URL` nas Actions Variables do GitHub e republicar o frontend. Apenas a URL pública da API vai para o bundle.
+
+## PostgreSQL: conexão interna Render e TLS externo
+
+A configuração anterior forçava TLS para qualquer `NODE_ENV=production`. Isso tentava validar o certificado também na URL interna e era compatível com a falha relatada `DEPTH_ZERO_SELF_SIGNED_CERT`. O erro significa que a conexão TLS recebeu um certificado autoassinado não confiável; o código não tinha distinção entre transporte privado interno e externo. Não houve acesso aos logs ou ao banco real do usuário nesta correção.
+
+`DATABASE_SSL_MODE` agora define a política usada por API, worker, migrations e provisionamento:
+
+| Política          | Comportamento                                                                                                                                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto` (padrão)   | Na plataforma (`RENDER=true`, marcador injetado pelo Render), hostname interno curto estritamente no formato `dpg-<id>-<letra>` e sem pedido explícito de TLS/CA: `pg.ssl=false`. Outros hosts em produção continuam com `rejectUnauthorized:true`. |
+| `render-internal` | Opt-in explícito para a URL interna curta do PostgreSQL Render. Usa `ssl:false` somente nessa conexão e rejeita hosts externos, TLS exigido na URL ou CA conflitante.                                                                               |
+| `verify-full`     | TLS com validação de certificado e hostname, inclusive quando o host é interno. `DATABASE_CA_CERT` fornece um arquivo PEM confiável quando necessário.                                                                                              |
+
+Para corrigir a API que usa **Internal Database URL**: manter `NODE_ENV=production`, usar a URL interna original fornecida pelo Render, definir `DATABASE_SSL_MODE=auto` (ou `render-internal` para opção explícita), não acrescentar `sslmode=require/verify-full` nem `DATABASE_CA_CERT` nessa conexão privada e fazer redeploy. Não definir manualmente `RENDER=true` fora da plataforma para tentar classificar uma conexão externa como interna. Se a URL interna real não corresponder ao formato restrito suportado, a aplicação mantém TLS; investigar a topologia antes de ampliar a regra.
+
+URLs externas, inclusive `dpg-…-a.<região>-postgres.render.com`, não são tratadas como internas. Usar TLS validado e configurar a CA correta quando necessária. Pedidos explícitos `sslmode=require`, `verify-ca`, `verify-full` ou `ssl=true` mantêm verificação completa mesmo em `auto` no Render. `sslmode=no-verify`, modos ambíguos, parâmetros duplicados e desativação externa de TLS em produção são rejeitados. O código remove opções SSL/libpq da URL antes de entregá-la ao `pg`, para impedir que o parser substitua o objeto SSL seguro; certificados pela URL não são aceitos, usar `DATABASE_CA_CERT`.
+
+Não há retry com SSL enfraquecido após falha de certificado, nem alteração de TLS global. `ssl:false` é específico da conexão PostgreSQL privada autorizada; HTTPS dos provedores continua validado. Após redeploy, verificar migrations, `/health/ready` e login. Sucesso local não confirma o deploy Render.
 
 ## Railway
 

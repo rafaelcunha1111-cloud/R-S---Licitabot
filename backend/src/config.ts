@@ -12,6 +12,11 @@ const envSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   FRONTEND_ORIGIN: z.string().url().default("http://localhost:5173"),
+  DATABASE_SSL_MODE: z
+    .enum(["auto", "verify-full", "render-internal"])
+    .default("auto"),
+  // Non-secret platform marker injected by Render.
+  RENDER: z.enum(["true", "false"]).optional(),
   DATABASE_CA_CERT: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
