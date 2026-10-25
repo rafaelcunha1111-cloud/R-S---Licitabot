@@ -1,3 +1,8 @@
+import {
+  authorizeGmail,
+  completeGmailAuthorization,
+  encryptSecret,
+} from "../src/gmail.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -445,6 +450,116 @@ test(
           );
           assert.equal((await request("/api/auth/logout", "POST")).status, 204);
           assert.equal((await request("/api/procurements")).status, 401);
+        },
+      );
+      await t.test(
+        "OAuth Gmail usa state único, PKCE, conta verificada e refresh token criptografado",
+        async () => {
+          const cfg = {
+            ...c,
+            EMAIL_PROVIDER: "gmail" as const,
+            GMAIL_CLIENT_ID: "fixture-client",
+            GMAIL_CLIENT_SECRET: "fixture-secret",
+            GMAIL_REDIRECT_URI: "https://example.invalid/oauth/gmail/callback",
+            GMAIL_SENDER_EMAIL: "owner@example.invalid",
+            GMAIL_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
+          };
+          const auth = new URL(await authorizeGmail(pool, cfg, user));
+          assert.equal(auth.origin, "https://accounts.google.com");
+          assert.equal(auth.searchParams.get("code_challenge_method"), "S256");
+          const state = auth.searchParams.get("state")!;
+          const response = async () =>
+            new Response(
+              JSON.stringify({
+                id_token: "fixture-id",
+                refresh_token: "fixture-refresh",
+                scope:
+                  "openid email https://www.googleapis.com/auth/gmail.send",
+              }),
+            );
+          await assert.rejects(
+            completeGmailAuthorization(
+              pool,
+              cfg,
+              state,
+              "fixture-code",
+              response,
+              async () => ({
+                email: "wrong@example.invalid",
+                email_verified: true,
+              }),
+            ),
+            /wrong_google_account/,
+          );
+          const auth2 = new URL(await authorizeGmail(pool, cfg, user));
+          const state2 = auth2.searchParams.get("state")!;
+          await completeGmailAuthorization(
+            pool,
+            cfg,
+            state2,
+            "fixture-code",
+            response,
+            async () => ({
+              email: "owner@example.invalid",
+              email_verified: true,
+            }),
+          );
+          const row = (
+            await pool.query(
+              "SELECT refresh_token_encrypted FROM gmail_accounts WHERE email=$1",
+              ["owner@example.invalid"],
+            )
+          ).rows[0];
+          assert.ok(!row.refresh_token_encrypted.includes("fixture-refresh"));
+          await assert.rejects(
+            completeGmailAuthorization(
+              pool,
+              cfg,
+              state2,
+              "fixture-code",
+              response,
+              async () => ({
+                email: "owner@example.invalid",
+                email_verified: true,
+              }),
+            ),
+            /invalid_oauth_state/,
+          );
+          await assert.rejects(
+            completeGmailAuthorization(
+              pool,
+              cfg,
+              "invalid-state",
+              "fixture-code",
+              response,
+            ),
+            /invalid_oauth_state/,
+          );
+        },
+      );
+      await t.test(
+        "lease Gmail expirada não dispara reenvio; WhatsApp globalmente bloqueado",
+        async () => {
+          const row = (
+            await pool.query(
+              "SELECT id FROM notifications WHERE channel='email' LIMIT 1",
+            )
+          ).rows[0];
+          await pool.query(
+            "UPDATE notifications SET provider='gmail',status='processing',locked_at=now()-interval '3 minutes' WHERE id=$1",
+            [row.id],
+          );
+          await dispatchOne(pool, c, async () => {
+            throw Error("not sent");
+          });
+          assert.equal(
+            (
+              await pool.query("SELECT status FROM notifications WHERE id=$1", [
+                row.id,
+              ])
+            ).rows[0].status,
+            "delivery_unknown",
+          );
         },
       );
     } finally {

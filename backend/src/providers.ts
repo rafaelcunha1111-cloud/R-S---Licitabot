@@ -1,7 +1,8 @@
 import type { Config } from "./config.js";
-import { emailReady, whatsappReady } from "./config.js";
+import { whatsappReady } from "./config.js";
 export type Delivery = {
   channel: "email" | "whatsapp";
+  provider?: "resend" | "gmail" | "whatsapp";
   id: string;
   email: string;
   phone: string | null;
@@ -20,8 +21,13 @@ export async function sendNotification(
   n: Delivery,
   request: typeof fetch = fetch,
 ): Promise<SendResult> {
+  if (n.channel === "email" && (n.provider || c.EMAIL_PROVIDER) === "gmail")
+    return {
+      status: "pending_configuration",
+      code: "gmail_requires_database_sender",
+    };
   if (
-    (n.channel === "email" && !emailReady(c)) ||
+    (n.channel === "email" && !(c.RESEND_API_KEY && c.EMAIL_FROM)) ||
     (n.channel === "whatsapp" && (!whatsappReady(c) || !n.phone))
   )
     return { status: "pending_configuration", code: "provider_not_configured" };

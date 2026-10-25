@@ -7,6 +7,14 @@ envVarGroups:
         value: production
       - key: DATABASE_URL
         sync: false
+      - key: EMAIL_PROVIDER
+        value: gmail
+      - key: GMAIL_SENDER_EMAIL
+        value: construcenter.licitacao@gmail.com
+      - key: GMAIL_REDIRECT_URI
+        value: https://rs-licitabot-api.onrender.com/oauth/gmail/callback
+      - key: WHATSAPP_ENABLED
+        value: "false"
       - key: DATABASE_SSL_MODE
         value: auto
       - key: FRONTEND_ORIGIN

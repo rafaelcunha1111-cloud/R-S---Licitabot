@@ -1,6 +1,7 @@
 import type pg from "pg";
 import { transaction } from "./db.js";
 import type { Config } from "./config.js";
+import { sendGmail } from "./gmail.js";
 import {
   sendNotification,
   type Delivery,
@@ -12,7 +13,7 @@ export async function dispatchOne(
   send: (c: Config, n: Delivery) => Promise<SendResult> = sendNotification,
 ) {
   await pool.query(
-    `UPDATE notifications SET status=CASE WHEN channel='email' AND created_at>now()-interval '23 hours' THEN 'retry' ELSE 'delivery_unknown' END,last_error='lease_expired',next_attempt_at=now() WHERE status='processing' AND locked_at<now()-interval '2 minutes'`,
+    `UPDATE notifications SET status=CASE WHEN provider='resend' AND created_at>now()-interval '23 hours' THEN 'retry' ELSE 'delivery_unknown' END,last_error='lease_expired',next_attempt_at=now() WHERE status='processing' AND locked_at<now()-interval '2 minutes'`,
   );
   const job = await transaction(pool, async (db) => {
     const result = await db.query(
@@ -38,6 +39,7 @@ export async function dispatchOne(
       return;
     }
     if (
+      (row.provider || c.EMAIL_PROVIDER) === "resend" &&
       row.channel === "email" &&
       row.attempts > 0 &&
       Date.now() - new Date(row.created_at).getTime() > 23 * 3600000
@@ -49,25 +51,38 @@ export async function dispatchOne(
       return;
     }
     await db.query(
-      "UPDATE notifications SET status='processing',locked_at=now(),attempts=attempts+1 WHERE id=$1",
-      [row.id],
+      "UPDATE notifications SET status='processing',locked_at=now(),attempts=attempts+1,provider=COALESCE(provider,$2) WHERE id=$1",
+      [row.id, row.channel === "email" ? c.EMAIL_PROVIDER : "whatsapp"],
     );
-    return row;
+    return {
+      ...row,
+      provider:
+        row.provider ||
+        (row.channel === "email" ? c.EMAIL_PROVIDER : "whatsapp"),
+    };
   });
   if (!job) return false;
   let result: SendResult;
   try {
-    result = await send(c, {
-      id: job.id,
-      channel: job.channel,
-      email: job.email,
-      phone: job.whatsapp_phone,
-      title: job.title,
-      body: job.body,
-    });
+    const sender =
+      job.provider === "gmail"
+        ? (cfg: Config, delivery: Delivery) => sendGmail(pool, cfg, delivery)
+        : send;
+    result =
+      job.channel === "whatsapp" && !c.WHATSAPP_ENABLED
+        ? { status: "pending_configuration", code: "whatsapp_disabled" }
+        : await sender(c, {
+            id: job.id,
+            provider: job.provider,
+            channel: job.channel,
+            email: job.email,
+            phone: job.whatsapp_phone,
+            title: job.title,
+            body: job.body,
+          });
   } catch {
     result = {
-      status: job.channel === "email" ? "retry" : "delivery_unknown",
+      status: job.provider === "resend" ? "retry" : "delivery_unknown",
       code: "unexpected_sender_error",
     };
   }
@@ -88,7 +103,7 @@ export async function dispatchOne(
     ],
   );
   // Reconcile signed receipts arriving before provider acceptance is committed.
-  if (result.status === "provider_accepted")
+  if (result.status === "provider_accepted" && job.provider !== "gmail")
     await pool.query(
       `UPDATE notifications n SET status=r.status,delivered_at=CASE WHEN r.status='delivered' THEN r.received_at ELSE NULL END FROM (SELECT DISTINCT ON (channel,provider_id) * FROM delivery_receipts ORDER BY channel,provider_id,(status='delivered') DESC,received_at DESC) r WHERE n.id=$1 AND r.provider_id=n.provider_id AND r.channel=n.channel`,
       [job.id],

@@ -18,6 +18,19 @@ const envSchema = z.object({
   // Non-secret platform marker injected by Render.
   RENDER: z.enum(["true", "false"]).optional(),
   DATABASE_CA_CERT: z.string().optional(),
+  EMAIL_PROVIDER: z.enum(["resend", "gmail"]).default("resend"),
+  GMAIL_CLIENT_ID: z.string().optional(),
+  GMAIL_CLIENT_SECRET: z.string().optional(),
+  GMAIL_REDIRECT_URI: z.string().url().optional(),
+  GMAIL_SENDER_EMAIL: z
+    .string()
+    .email()
+    .default("construcenter.licitacao@gmail.com"),
+  GMAIL_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  WHATSAPP_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
   RESEND_WEBHOOK_SECRET: z.string().optional(),
@@ -44,6 +57,22 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
         parsed.error.issues.map((i) => i.path.join(".")).join(", "),
     );
   const c = parsed.data;
+  if (
+    c.GMAIL_TOKEN_ENCRYPTION_KEY &&
+    !/^[A-Za-z0-9+/]{43}=$/.test(c.GMAIL_TOKEN_ENCRYPTION_KEY)
+  )
+    throw Error(
+      "GMAIL_TOKEN_ENCRYPTION_KEY deve conter 32 bytes aleatórios em base64.",
+    );
+  if (
+    c.GMAIL_REDIRECT_URI &&
+    (new URL(c.GMAIL_REDIRECT_URI).pathname !== "/oauth/gmail/callback" ||
+      (c.NODE_ENV === "production" &&
+        new URL(c.GMAIL_REDIRECT_URI).protocol !== "https:"))
+  )
+    throw Error(
+      "GMAIL_REDIRECT_URI deve usar o callback /oauth/gmail/callback e HTTPS em produção.",
+    );
   const origin = new URL(c.FRONTEND_ORIGIN);
   if (origin.origin !== c.FRONTEND_ORIGIN)
     throw Error(
@@ -54,9 +83,17 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return c;
 }
 export const emailReady = (c: Config) =>
-  Boolean(c.RESEND_API_KEY && c.EMAIL_FROM);
+  c.EMAIL_PROVIDER === "gmail"
+    ? Boolean(
+        c.GMAIL_CLIENT_ID &&
+        c.GMAIL_CLIENT_SECRET &&
+        c.GMAIL_REDIRECT_URI &&
+        c.GMAIL_TOKEN_ENCRYPTION_KEY,
+      )
+    : Boolean(c.RESEND_API_KEY && c.EMAIL_FROM);
 export const whatsappReady = (c: Config) =>
   Boolean(
+    c.WHATSAPP_ENABLED &&
     c.WHATSAPP_TOKEN &&
     c.WHATSAPP_PHONE_NUMBER_ID &&
     c.WHATSAPP_GRAPH_VERSION &&

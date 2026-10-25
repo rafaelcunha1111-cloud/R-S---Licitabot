@@ -16,6 +16,7 @@ import { transaction } from "./db.js";
 import { portalStatus, portals } from "./portals.js";
 import { recordActivity } from "./events.js";
 import { webhooks } from "./webhooks.js";
+import { gmailCallback, gmailRoutes } from "./gmail-routes.js";
 const uuid = z.string().uuid();
 const procurementSchema = z
   .object({
@@ -63,6 +64,7 @@ export function createApp(pool: pg.Pool, c: Config) {
       res.status(503).json({ status: "unavailable" });
     }
   });
+  app.use("/oauth", gmailCallback(pool, c));
   app.use("/webhooks", webhooks(pool, c));
   app.use(express.json({ limit: "32kb" }));
   const dummy = hashPassword("not-a-user-password-random-dummy");
@@ -104,6 +106,7 @@ export function createApp(pool: pg.Pool, c: Config) {
     res.set("Cache-Control", "no-store");
     next();
   });
+  app.use("/api/gmail", gmailRoutes(pool, c));
   app.post("/api/auth/logout", async (_req, res) => {
     await pool.query("DELETE FROM auth_sessions WHERE token_hash=$1", [
       res.locals.tokenHash,
@@ -132,6 +135,10 @@ export function createApp(pool: pg.Pool, c: Config) {
       })
       .strict()
       .parse(req.body);
+    if (body.whatsappOptIn && !c.WHATSAPP_ENABLED) {
+      res.status(400).json({ error: "whatsapp_disabled" });
+      return;
+    }
     if (body.whatsappOptIn && !body.whatsappPhone) {
       res.status(400).json({ error: "phone_required" });
       return;
@@ -172,9 +179,11 @@ export function createApp(pool: pg.Pool, c: Config) {
         email: emailReady(c)
           ? "configured_unverified"
           : "pending_configuration",
-        whatsapp: whatsappReady(c)
-          ? "configured_unverified"
-          : "pending_configuration",
+        whatsapp: !c.WHATSAPP_ENABLED
+          ? "disabled"
+          : whatsappReady(c)
+            ? "configured_unverified"
+            : "pending_configuration",
       },
       portals: portalStatus.map((portal) => ({
         ...portal,
@@ -353,12 +362,10 @@ export function createApp(pool: pg.Pool, c: Config) {
       _next: express.NextFunction,
     ) => {
       if (error instanceof z.ZodError) {
-        res
-          .status(400)
-          .json({
-            error: "invalid_input",
-            fields: error.issues.map((i) => i.path.join(".")),
-          });
+        res.status(400).json({
+          error: "invalid_input",
+          fields: error.issues.map((i) => i.path.join(".")),
+        });
         return;
       }
       if (error?.code === "23505") {

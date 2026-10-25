@@ -86,6 +86,7 @@ test("Resend envia idempotency-key, diferencia aceitação de entrega e respeita
 test("WhatsApp não reenvia automaticamente uma tentativa com resultado desconhecido", async () => {
   const c = {
     ...config,
+    WHATSAPP_ENABLED: true,
     WHATSAPP_TOKEN: "test-placeholder",
     WHATSAPP_PHONE_NUMBER_ID: "123",
     WHATSAPP_GRAPH_VERSION: "v25.0",

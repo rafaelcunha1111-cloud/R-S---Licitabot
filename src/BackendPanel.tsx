@@ -1,3 +1,4 @@
+import { GmailSettings } from "./GmailSettings";
 import { useState, useEffect } from "react";
 const api = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "";
 type Procurement = {
@@ -492,7 +493,7 @@ export function BackendPanel() {
                 />
               </label>
               <label>
-                <input type="checkbox" name="whatsappOptIn" /> Confirmo
+                <input type="checkbox" name="whatsappOptIn" disabled /> Confirmo
                 autorização para receber alertas neste número
               </label>
               <p>
