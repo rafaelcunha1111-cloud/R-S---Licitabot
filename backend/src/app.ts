@@ -67,6 +67,18 @@ export function createApp(pool: pg.Pool, c: Config) {
   app.use(express.json({ limit: "32kb" }));
   const dummy = hashPassword("not-a-user-password-random-dummy");
   app.get("/api/auth/initial-status", async (_req,res) => { const result = await pool.query("SELECT count(*)::int AS count FROM users"); res.json({initialized: result.rows[0].count > 0}); });
+  app.post("/api/auth/initial-setup", async (req,res) => {
+    const body = z.object({ email:z.literal("rafaelcunha1111@gmail.com"), password:z.string().min(14).max(128), setupKey:z.string().min(32) }).strict().parse(req.body);
+    if (!c.INITIAL_ADMIN_SETUP_KEY || body.setupKey !== c.INITIAL_ADMIN_SETUP_KEY) {res.status(403).json({error:"setup_disabled"});return;}
+    const result = await transaction(pool,async db=>{
+      await db.query("SELECT pg_advisory_xact_lock(83177245)");
+      const existing = await db.query("SELECT id FROM users LIMIT 1");
+      if (existing.rowCount) return false;
+      await db.query("INSERT INTO users(email,password_hash) VALUES($1,$2)",[body.email,await hashPassword(body.password)]);
+      return true;
+    });
+    res.status(result?201:409).json({status:result?"created":"already_initialized"});
+  });
   app.post(
     "/api/auth/login",
     rateLimit({
