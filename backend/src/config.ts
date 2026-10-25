@@ -18,6 +18,7 @@ const envSchema = z.object({
   // Non-secret platform marker injected by Render.
   RENDER: z.enum(["true", "false"]).optional(),
   DATABASE_CA_CERT: z.string().optional(),
+  INITIAL_ADMIN_SETUP_KEY: z.string().min(32).optional(),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
   RESEND_WEBHOOK_SECRET: z.string().optional(),
