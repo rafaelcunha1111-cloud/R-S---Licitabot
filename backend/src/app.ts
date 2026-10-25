@@ -261,6 +261,11 @@ export function createApp(pool: pg.Pool, c: Config) {
     if ("error" in result) { res.status(409).json(result); return; }
     res.status(201).json(result);
   });
+  app.post("/api/drive/import-candidates/:id/outcome", async (req, res) => {
+    const outcome = z.enum(["unclassified","won","lost","in_progress"]).parse(req.body.outcome);
+    await pool.query("UPDATE drive_import_candidates SET outcome_status=$1 WHERE id=$2 AND user_id=$3", [outcome,uuid.parse(req.params.id),res.locals.userId]);
+    res.json({outcome});
+  });
   app.post("/api/drive/import-candidates/:id/dismiss", async (req, res) => {
     const result = await pool.query(
       "UPDATE drive_import_candidates SET review_status='dismissed',updated_at=now() WHERE id=$1 AND user_id=$2 AND review_status='pending' RETURNING id",
