@@ -231,7 +231,7 @@ export function createApp(pool: pg.Pool, c: Config) {
   });
   app.get("/api/drive/import-candidates", async (_req, res) => {
     const result = await pool.query(
-      "SELECT id,folder_name,folder_url,year,review_status,procurement_id,created_at FROM drive_import_candidates WHERE user_id=$1 ORDER BY folder_name LIMIT 500",
+      "SELECT id,folder_name,folder_url,year,review_status,outcome_status,procurement_id,created_at FROM drive_import_candidates WHERE user_id=$1 ORDER BY folder_name LIMIT 500",
       [res.locals.userId],
     );
     res.json(result.rows);
