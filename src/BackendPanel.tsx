@@ -1,3 +1,4 @@
+import driveFolders2026 from "../imports/drive-licitacoes-2026.json";
 import { useState, useEffect } from "react";
 const api = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "";
 type Procurement = {
@@ -245,7 +246,9 @@ export function BackendPanel() {
           </div>
           <section className="panel info">
             <h2>Importar pastas do Google Drive — 2026</h2>
-            <p>Selecione um arquivo JSON de pastas. Todas entram como pendentes de revisão, sem ativar monitoramento.</p>
+            <p>As 74 pastas de 2026 estão preparadas. Clique para enviar à sua fila de conferência, sem ativar monitoramento.</p>
+            <button className="outline" disabled={busy} onClick={() => void act(async () => { await request("/api/drive/import-candidates","POST",{year:2026,folders:zDriveFolders(driveFolders2026)}); await refresh(); })}>Importar as 74 pastas de 2026</button>
+            <p>Alternativamente, selecione um arquivo JSON:</p>
             <input type="file" accept=".json,application/json" disabled={busy} onChange={e => {
               const file=e.currentTarget.files?.[0];
               if (!file) return;
