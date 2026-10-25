@@ -73,6 +73,9 @@ function zDriveFolders(value:unknown): {id:string;name:string;url:string}[] {
 export function BackendPanel() {
   const [token, setToken] = useState("");
   const [showSetup, setShowSetup] = useState(false);
+  const [driveFilter, setDriveFilter] = useState("pending");
+  const [driveSearch, setDriveSearch] = useState("");
+  const [driveSelected, setDriveSelected] = useState<string | null>(null);
   const [driveCandidates, setDriveCandidates] = useState<{id:string;folder_name:string;folder_url:string;review_status:string}[]>([]);
   const [error, setError] = useState("");
   const [status, setStatus] = useState<Status>();
@@ -261,9 +264,25 @@ export function BackendPanel() {
               });
               e.currentTarget.value="";
             }}/>
-            <p>{driveCandidates.length} pastas recebidas para conferência.</p>
-            <div style={{maxHeight:360,overflowY:"auto"}}>
-              {driveCandidates.map(item=><p key={item.id}><a href={item.folder_url} target="_blank" rel="noopener noreferrer">{item.folder_name}</a> — {item.review_status}</p>)}
+            <p><strong>{driveCandidates.length} pastas registradas</strong> · {driveCandidates.filter(x=>x.review_status==="pending").length} pendentes · {driveCandidates.filter(x=>x.review_status==="imported").length} aprovadas · {driveCandidates.filter(x=>x.review_status==="dismissed").length} descartadas</p>
+            <label className="field">Pesquisar licitação ou cidade<input value={driveSearch} onChange={e=>setDriveSearch(e.target.value)} placeholder="Ex.: PE 58/2026, Arcos"/></label>
+            <label className="field">Situação<select value={driveFilter} onChange={e=>setDriveFilter(e.target.value)}><option value="pending">Pendentes</option><option value="imported">Aprovadas</option><option value="dismissed">Descartadas</option><option value="all">Todas</option></select></label>
+            <div style={{maxHeight:520,overflowY:"auto"}}>
+              {driveCandidates.filter(item=>(driveFilter==="all"||item.review_status===driveFilter)&&item.folder_name.toLocaleLowerCase("pt-BR").includes(driveSearch.toLocaleLowerCase("pt-BR"))).map(item=><div key={item.id} style={{padding:"12px 0",borderBottom:"1px solid #ddd"}}>
+                <strong><a href={item.folder_url} target="_blank" rel="noopener noreferrer">{item.folder_name}</a></strong> — {item.review_status==="pending"?"Pendente":item.review_status==="imported"?"Aprovada":"Descartada"}
+                {item.review_status==="pending"&&<div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+                  <button type="button" className="outline" disabled={busy} onClick={()=>setDriveSelected(driveSelected===item.id?null:item.id)}>Conferir / aprovar</button>
+                  <button type="button" className="outline" disabled={busy} onClick={()=>{if(window.confirm("Descartar esta pasta da fila?")) void act(async()=>{await request("/api/drive/import-candidates/"+item.id+"/dismiss","POST");await refresh();});}}>Descartar</button>
+                </div>}
+                {driveSelected===item.id&&item.review_status==="pending"&&<form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);void act(async()=>{await request("/api/drive/import-candidates/"+item.id+"/approve","POST",{portal:String(f.get("portal")),externalRef:String(f.get("externalRef")),agency:String(f.get("agency")),object:String(f.get("object"))});setDriveSelected(null);await refresh();});}}>
+                  <p>Confira edital e TR na pasta antes de aprovar. A aprovação não ativa o monitoramento.</p>
+                  <label className="field">Portal<select name="portal" required>{names.map(n=><option key={n} value={n}>{n}</option>)}</select></label>
+                  <label className="field">Número da licitação<input name="externalRef" defaultValue={item.folder_name.split(" - ")[0]} required/></label>
+                  <label className="field">Órgão / cidade<input name="agency" defaultValue={item.folder_name.split(" - ").slice(1).join(" - ")} required/></label>
+                  <label className="field">Objeto da licitação<input name="object" required placeholder="Conforme edital e termo de referência"/></label>
+                  <button type="submit" disabled={busy}>Aprovar sem monitoramento</button>
+                </form>}
+              </div>)}
             </div>
           </section>
           <section className="panel info">
