@@ -64,6 +64,7 @@ const names = [
 ];
 export function BackendPanel() {
   const [token, setToken] = useState("");
+  const [showSetup, setShowSetup] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState<Status>();
   const [items, setItems] = useState<Procurement[]>([]);
@@ -164,6 +165,8 @@ export function BackendPanel() {
       {!token ? (
         <section className="panel info">
           <h2>Entrar no backend</h2>
+          <button className="outline" type="button" onClick={() => setShowSetup(!showSetup)}>Criar primeiro acesso administrativo</button>
+          {showSetup && <form onSubmit={(e) => {e.preventDefault(); const form=e.currentTarget; const f=new FormData(form); void act(async () => {await request("/api/auth/initial-setup","POST",{email:"rafaelcunha1111@gmail.com",password:f.get("password"),setupKey:f.get("setupKey")});form.reset();setShowSetup(false);setError("Administrador criado. Faça login com a senha cadastrada.");});}}><p>Disponível somente enquanto não existir usuário e com chave de ativação fornecida pelo administrador da hospedagem.</p><label className="field">Chave de ativação<input name="setupKey" type="password" required minLength={32}/></label><label className="field">Crie sua senha (mínimo 14 caracteres)<input name="password" type="password" autoComplete="new-password" required minLength={14} maxLength={128}/></label><button className="outline" disabled={busy}>Criar administrador</button></form>}
           <p>
             Usuário provisionado pelo administrador. Token fica somente na
             memória desta página.
