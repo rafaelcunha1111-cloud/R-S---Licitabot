@@ -60,7 +60,7 @@ export async function dispatchOne(
     result = await send(c, {
       id: job.id,
       channel: job.channel,
-      email: job.email,
+      email: c.ALERT_RECIPIENT_EMAIL || job.email,
       phone: job.whatsapp_phone,
       title: job.title,
       body: job.body,
