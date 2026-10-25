@@ -76,7 +76,7 @@ export function BackendPanel() {
   const [driveFilter, setDriveFilter] = useState("pending");
   const [driveSearch, setDriveSearch] = useState("");
   const [driveSelected, setDriveSelected] = useState<string | null>(null);
-  const [driveCandidates, setDriveCandidates] = useState<{id:string;folder_name:string;folder_url:string;review_status:string}[]>([]);
+  const [driveCandidates, setDriveCandidates] = useState<{id:string;folder_name:string;folder_url:string;review_status:string;outcome_status:string}[]>([]);
   const [error, setError] = useState("");
   const [status, setStatus] = useState<Status>();
   const [items, setItems] = useState<Procurement[]>([]);
@@ -270,6 +270,7 @@ export function BackendPanel() {
             <div style={{maxHeight:520,overflowY:"auto"}}>
               {driveCandidates.filter(item=>(driveFilter==="all"||item.review_status===driveFilter)&&item.folder_name.toLocaleLowerCase("pt-BR").includes(driveSearch.toLocaleLowerCase("pt-BR"))).map(item=><div key={item.id} style={{padding:"12px 0",borderBottom:"1px solid #ddd"}}>
                 <strong><a href={item.folder_url} target="_blank" rel="noopener noreferrer">{item.folder_name}</a></strong> — {item.review_status==="pending"?"Pendente":item.review_status==="imported"?"Aprovada":"Descartada"}
+                <select aria-label="Resultado da licitação" value={item.outcome_status||"unclassified"} disabled={busy} onChange={e=>void act(async()=>{await request("/api/drive/import-candidates/"+item.id+"/outcome","POST",{outcome:e.target.value});await refresh();})}><option value="unclassified">Não classificada</option><option value="won">Ganha</option><option value="lost">Perdida</option><option value="in_progress">Em andamento</option></select>
                 {item.review_status==="pending"&&<div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
                   <button type="button" className="outline" disabled={busy} onClick={()=>setDriveSelected(driveSelected===item.id?null:item.id)}>Conferir / aprovar</button>
                   <button type="button" className="outline" disabled={busy} onClick={()=>{if(window.confirm("Descartar esta pasta da fila?")) void act(async()=>{await request("/api/drive/import-candidates/"+item.id+"/dismiss","POST");await refresh();});}}>Descartar</button>
