@@ -19,6 +19,10 @@ const envSchema = z.object({
   RENDER: z.enum(["true", "false"]).optional(),
   DATABASE_CA_CERT: z.string().optional(),
   INITIAL_ADMIN_SETUP_KEY: z.string().min(32).optional(),
+  GMAIL_CLIENT_ID: z.string().optional(),
+  GMAIL_CLIENT_SECRET: z.string().optional(),
+  GMAIL_REFRESH_TOKEN: z.string().optional(),
+  GMAIL_SENDER_EMAIL: z.string().email().optional(),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
   ALERT_RECIPIENT_EMAIL: z.string().email().optional(),
@@ -56,7 +60,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return c;
 }
 export const emailReady = (c: Config) =>
-  Boolean(c.RESEND_API_KEY && c.EMAIL_FROM);
+  Boolean((c.GMAIL_CLIENT_ID && c.GMAIL_CLIENT_SECRET && c.GMAIL_REFRESH_TOKEN && c.GMAIL_SENDER_EMAIL) || (c.RESEND_API_KEY && c.EMAIL_FROM));
 export const whatsappReady = (c: Config) =>
   Boolean(
     c.WHATSAPP_TOKEN &&
