@@ -66,6 +66,7 @@ export function createApp(pool: pg.Pool, c: Config) {
   app.use("/webhooks", webhooks(pool, c));
   app.use(express.json({ limit: "32kb" }));
   const dummy = hashPassword("not-a-user-password-random-dummy");
+  app.get("/api/auth/initial-status", async (_req,res) => { const result = await pool.query("SELECT count(*)::int AS count FROM users"); res.json({initialized: result.rows[0].count > 0}); });
   app.post(
     "/api/auth/login",
     rateLimit({
