@@ -183,6 +183,79 @@ export function createApp(pool: pg.Pool, c: Config) {
       monitoringActive: false,
     });
   });
+  // Drive folder metadata is submitted only by an authenticated user. No portal
+  // participation or monitoring is inferred from the presence of a folder.
+  const driveFolderSchema = z.object({
+    id: z.string().trim().min(1).max(250),
+    name: z.string().trim().min(1).max(500),
+    url: z.string().url().max(1000).refine((value) =>
+      /^https:\/\/drive\.google\.com\/drive\/folders\/[a-zA-Z0-9_-]+$/.test(value),
+    ),
+  }).strict();
+  app.post("/api/drive/import-candidates", async (req, res) => {
+    const body = z.object({
+      year: z.literal(2026),
+      folders: z.array(driveFolderSchema).min(1).max(100),
+    }).strict().parse(req.body);
+    const result = await transaction(pool, async (db) => {
+      let imported = 0;
+      for (const folder of body.folders) {
+        if (folder.url !== "https://drive.google.com/drive/folders/" + folder.id)
+          continue;
+        const saved = await db.query(
+          `INSERT INTO drive_import_candidates(user_id,drive_folder_id,folder_name,folder_url,year)
+           VALUES($1,$2,$3,$4,$5)
+           ON CONFLICT(user_id,drive_folder_id) DO UPDATE
+           SET folder_name=EXCLUDED.folder_name,folder_url=EXCLUDED.folder_url,updated_at=now()
+           RETURNING id`,
+          [res.locals.userId, folder.id, folder.name, folder.url, body.year],
+        );
+        imported += saved.rowCount || 0;
+      }
+      return imported;
+    });
+    res.json({ staged: result, monitoringActivated: false });
+  });
+  app.get("/api/drive/import-candidates", async (_req, res) => {
+    const result = await pool.query(
+      "SELECT id,folder_name,folder_url,year,review_status,procurement_id,created_at FROM drive_import_candidates WHERE user_id=$1 ORDER BY folder_name LIMIT 500",
+      [res.locals.userId],
+    );
+    res.json(result.rows);
+  });
+  app.post("/api/drive/import-candidates/:id/approve", async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    const body = procurementSchema.parse(req.body);
+    const result = await transaction(pool, async (db) => {
+      const candidate = (await db.query(
+        "SELECT * FROM drive_import_candidates WHERE id=$1 AND user_id=$2 FOR UPDATE",
+        [id, res.locals.userId],
+      )).rows[0];
+      if (!candidate) return null;
+      if (candidate.review_status !== "pending") return { error: "already_reviewed" };
+      const procurement = (await db.query(
+        `INSERT INTO procurements(user_id,portal,external_ref,agency,object,source,monitoring_enabled)
+         VALUES($1,$2,$3,$4,$5,'manual',false) RETURNING *`,
+        [res.locals.userId,body.portal,body.externalRef,body.agency,body.object],
+      )).rows[0];
+      await db.query(
+        "UPDATE drive_import_candidates SET review_status='imported',procurement_id=$2,updated_at=now() WHERE id=$1",
+        [id, procurement.id],
+      );
+      return procurement;
+    });
+    if (!result) { res.status(404).json({error:"not_found"}); return; }
+    if ("error" in result) { res.status(409).json(result); return; }
+    res.status(201).json(result);
+  });
+  app.post("/api/drive/import-candidates/:id/dismiss", async (req, res) => {
+    const result = await pool.query(
+      "UPDATE drive_import_candidates SET review_status='dismissed',updated_at=now() WHERE id=$1 AND user_id=$2 AND review_status='pending' RETURNING id",
+      [uuid.parse(req.params.id),res.locals.userId],
+    );
+    if (!result.rowCount) { res.status(404).json({error:"not_found_or_reviewed"}); return; }
+    res.json({status:"dismissed"});
+  });
   app.get("/api/procurements", async (_req, res) =>
     res.json(
       (
@@ -198,7 +271,7 @@ export function createApp(pool: pg.Pool, c: Config) {
     const result = await transaction(pool, async (db) => {
       const result = (
         await db.query(
-          `INSERT INTO procurements(user_id,portal,external_ref,agency,object,source) VALUES($1,$2,$3,$4,$5,'manual') RETURNING *`,
+          `INSERT INTO procurements(user_id,portal,external_ref,agency,object,source,monitoring_enabled) VALUES($1,$2,$3,$4,$5,'manual',false) RETURNING *`,
           [
             res.locals.userId,
             body.portal,
