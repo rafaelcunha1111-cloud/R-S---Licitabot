@@ -28,7 +28,7 @@ async function receipt(
       [key, channel, providerId, status],
     );
     await c.query(
-      `UPDATE notifications SET status=$3,delivered_at=CASE WHEN $3='delivered' THEN now() ELSE delivered_at END WHERE channel=$1 AND provider_id=$2 AND status NOT IN ('delivered')`,
+      `UPDATE notifications SET status=$3,delivered_at=CASE WHEN $3='delivered' THEN now() ELSE delivered_at END WHERE channel=$1 AND provider_id=$2 AND (provider IS NULL OR (channel='email' AND provider='resend') OR (channel='whatsapp' AND provider='whatsapp')) AND status NOT IN ('delivered')`,
       [channel, providerId, status],
     );
   });

@@ -57,7 +57,7 @@ export function gmailRoutes(pool: pg.Pool, c: Config) {
         res.locals.userId,
       ])
     ).rows[0];
-    if (user?.email?.toLowerCase() !== c.GMAIL_SENDER_EMAIL.toLowerCase()) {
+    if (user?.email?.toLowerCase() !== c.GMAIL_OPERATOR_EMAIL.toLowerCase()) {
       res.status(403).json({ error: "gmail_operator_required" });
       return;
     }
@@ -72,7 +72,12 @@ export function gmailRoutes(pool: pg.Pool, c: Config) {
     ).rows[0];
     res.json({
       provider: c.EMAIL_PROVIDER,
-      authorized: Boolean(row),
+      authorized: Boolean(row || c.GMAIL_REFRESH_TOKEN),
+      tokenSource: row
+        ? "encrypted_database"
+        : c.GMAIL_REFRESH_TOKEN
+          ? "render_environment"
+          : "none",
       connectedAt: row?.connected_at || null,
       sender: c.GMAIL_SENDER_EMAIL,
       whatsappEnabled: c.WHATSAPP_ENABLED,
@@ -88,6 +93,17 @@ export function gmailRoutes(pool: pg.Pool, c: Config) {
     }
   });
   router.post("/disconnect", async (_req, res) => {
+    if (c.GMAIL_REFRESH_TOKEN) {
+      res
+        .status(409)
+        .json({
+          error: "remove_environment_refresh_token_in_render_before_disconnect",
+        });
+      return;
+    }
+    await pool.query("DELETE FROM gmail_oauth_states WHERE user_id=$1", [
+      res.locals.userId,
+    ]);
     await pool.query("DELETE FROM gmail_accounts WHERE email=$1", [
       c.GMAIL_SENDER_EMAIL,
     ]);

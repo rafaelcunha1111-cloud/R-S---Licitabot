@@ -1,5 +1,5 @@
 import type { Config } from "./config.js";
-import { whatsappReady } from "./config.js";
+import { emailProvider, whatsappReady } from "./config.js";
 export type Delivery = {
   channel: "email" | "whatsapp";
   provider?: "resend" | "gmail" | "whatsapp";
@@ -21,7 +21,7 @@ export async function sendNotification(
   n: Delivery,
   request: typeof fetch = fetch,
 ): Promise<SendResult> {
-  if (n.channel === "email" && (n.provider || c.EMAIL_PROVIDER) === "gmail")
+  if (n.channel === "email" && (n.provider || emailProvider(c)) === "gmail")
     return {
       status: "pending_configuration",
       code: "gmail_requires_database_sender",

@@ -68,6 +68,40 @@ export function createApp(pool: pg.Pool, c: Config) {
   app.use("/webhooks", webhooks(pool, c));
   app.use(express.json({ limit: "32kb" }));
   const dummy = hashPassword("not-a-user-password-random-dummy");
+  app.get("/api/auth/initial-status", async (_req, res) => {
+    const result = await pool.query("SELECT count(*)::int AS count FROM users");
+    res.json({ initialized: result.rows[0].count > 0 });
+  });
+  app.post("/api/auth/initial-setup", async (req, res) => {
+    const body = z
+      .object({
+        email: z.literal("rafaelcunha1111@gmail.com"),
+        password: z.string().min(14).max(128),
+        setupKey: z.string().min(32),
+      })
+      .strict()
+      .parse(req.body);
+    if (
+      !c.INITIAL_ADMIN_SETUP_KEY ||
+      body.setupKey !== c.INITIAL_ADMIN_SETUP_KEY
+    ) {
+      res.status(403).json({ error: "setup_disabled" });
+      return;
+    }
+    const result = await transaction(pool, async (db) => {
+      await db.query("SELECT pg_advisory_xact_lock(83177245)");
+      const existing = await db.query("SELECT id FROM users LIMIT 1");
+      if (existing.rowCount) return false;
+      await db.query("INSERT INTO users(email,password_hash) VALUES($1,$2)", [
+        body.email,
+        await hashPassword(body.password),
+      ]);
+      return true;
+    });
+    res
+      .status(result ? 201 : 409)
+      .json({ status: result ? "created" : "already_initialized" });
+  });
   app.post(
     "/api/auth/login",
     rateLimit({
@@ -192,6 +226,166 @@ export function createApp(pool: pg.Pool, c: Config) {
       monitoringActive: false,
     });
   });
+  // Drive folder metadata is submitted only by an authenticated user. No portal
+  // participation or monitoring is inferred from the presence of a folder.
+  const driveFolderSchema = z
+    .object({
+      id: z.string().trim().min(1).max(250),
+      name: z.string().trim().min(1).max(500),
+      url: z
+        .string()
+        .url()
+        .max(1000)
+        .refine((value) =>
+          /^https:\/\/drive\.google\.com\/drive\/folders\/[a-zA-Z0-9_-]+$/.test(
+            value,
+          ),
+        ),
+    })
+    .strict();
+  app.post("/api/drive/import-candidates", async (req, res) => {
+    const body = z
+      .object({
+        year: z.literal(2026),
+        folders: z.array(driveFolderSchema).min(1).max(100),
+      })
+      .strict()
+      .parse(req.body);
+    const result = await transaction(pool, async (db) => {
+      let imported = 0;
+      for (const folder of body.folders) {
+        if (
+          folder.url !==
+          "https://drive.google.com/drive/folders/" + folder.id
+        )
+          continue;
+        const saved = await db.query(
+          `INSERT INTO drive_import_candidates(user_id,drive_folder_id,folder_name,folder_url,year)
+           VALUES($1,$2,$3,$4,$5)
+           ON CONFLICT(user_id,drive_folder_id) DO UPDATE
+           SET folder_name=EXCLUDED.folder_name,folder_url=EXCLUDED.folder_url,updated_at=now()
+           RETURNING id`,
+          [res.locals.userId, folder.id, folder.name, folder.url, body.year],
+        );
+        imported += saved.rowCount || 0;
+      }
+      return imported;
+    });
+    res.json({ staged: result, monitoringActivated: false });
+  });
+  app.get("/api/drive/import-candidates", async (_req, res) => {
+    const result = await pool.query(
+      "SELECT id,folder_name,folder_url,year,review_status,outcome_status,procurement_id,created_at FROM drive_import_candidates WHERE user_id=$1 ORDER BY folder_name LIMIT 500",
+      [res.locals.userId],
+    );
+    res.json(result.rows);
+  });
+  app.post("/api/drive/import-candidates/:id/approve", async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    const body = procurementSchema.parse(req.body);
+    const result = await transaction(pool, async (db) => {
+      const candidate = (
+        await db.query(
+          "SELECT * FROM drive_import_candidates WHERE id=$1 AND user_id=$2 FOR UPDATE",
+          [id, res.locals.userId],
+        )
+      ).rows[0];
+      if (!candidate) return null;
+      if (candidate.review_status !== "pending")
+        return { error: "already_reviewed" };
+      const procurement = (
+        await db.query(
+          `INSERT INTO procurements(user_id,portal,external_ref,agency,object,source,monitoring_enabled)
+         VALUES($1,$2,$3,$4,$5,'manual',false) RETURNING *`,
+          [
+            res.locals.userId,
+            body.portal,
+            body.externalRef,
+            body.agency,
+            body.object,
+          ],
+        )
+      ).rows[0];
+      await db.query(
+        "UPDATE drive_import_candidates SET review_status='imported',procurement_id=$2,updated_at=now() WHERE id=$1",
+        [id, procurement.id],
+      );
+      return procurement;
+    });
+    if (!result) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    if ("error" in result) {
+      res.status(409).json(result);
+      return;
+    }
+    res.status(201).json(result);
+  });
+  app.get("/api/pncp/contratacao/:cnpj/:ano/:sequencial", async (req, res) => {
+    const cnpj = z
+      .string()
+      .regex(/^\\d{14}$/)
+      .parse(req.params.cnpj);
+    const ano = z.coerce
+      .number()
+      .int()
+      .min(2020)
+      .max(2100)
+      .parse(req.params.ano);
+    const sequencial = z.coerce
+      .number()
+      .int()
+      .positive()
+      .parse(req.params.sequencial);
+    const base = "https://pncp.gov.br/api/pncp/v1/orgaos/" + cnpj;
+    const paths = [
+      "/compras/" + ano + "/" + sequencial,
+      "/contratos/contratacao/" + ano + "/" + sequencial,
+    ];
+    const results = await Promise.all(
+      paths.map(async (path) => {
+        try {
+          const response = await fetch(base + path, {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!response.ok) return { status: response.status, data: null };
+          const data: unknown = await response.json();
+          return { status: 200, data };
+        } catch {
+          return { status: 0, data: null };
+        }
+      }),
+    );
+    res.json({
+      source: "PNCP",
+      consultedAt: new Date().toISOString(),
+      procurement: results[0],
+      contracts: results[1],
+    });
+  });
+  app.post("/api/drive/import-candidates/:id/outcome", async (req, res) => {
+    const outcome = z
+      .enum(["unclassified", "won", "lost", "in_progress"])
+      .parse(req.body.outcome);
+    await pool.query(
+      "UPDATE drive_import_candidates SET outcome_status=$1 WHERE id=$2 AND user_id=$3",
+      [outcome, uuid.parse(req.params.id), res.locals.userId],
+    );
+    res.json({ outcome });
+  });
+  app.post("/api/drive/import-candidates/:id/dismiss", async (req, res) => {
+    const result = await pool.query(
+      "UPDATE drive_import_candidates SET review_status='dismissed',updated_at=now() WHERE id=$1 AND user_id=$2 AND review_status='pending' RETURNING id",
+      [uuid.parse(req.params.id), res.locals.userId],
+    );
+    if (!result.rowCount) {
+      res.status(404).json({ error: "not_found_or_reviewed" });
+      return;
+    }
+    res.json({ status: "dismissed" });
+  });
   app.get("/api/procurements", async (_req, res) =>
     res.json(
       (
@@ -207,7 +401,7 @@ export function createApp(pool: pg.Pool, c: Config) {
     const result = await transaction(pool, async (db) => {
       const result = (
         await db.query(
-          `INSERT INTO procurements(user_id,portal,external_ref,agency,object,source) VALUES($1,$2,$3,$4,$5,'manual') RETURNING *`,
+          `INSERT INTO procurements(user_id,portal,external_ref,agency,object,source,monitoring_enabled) VALUES($1,$2,$3,$4,$5,'manual',false) RETURNING *`,
           [
             res.locals.userId,
             body.portal,

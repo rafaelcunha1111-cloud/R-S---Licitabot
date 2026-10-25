@@ -1,6 +1,6 @@
 import type pg from "pg";
 import { transaction } from "./db.js";
-import type { Config } from "./config.js";
+import { emailProvider, type Config } from "./config.js";
 import { sendGmail } from "./gmail.js";
 import {
   sendNotification,
@@ -39,7 +39,7 @@ export async function dispatchOne(
       return;
     }
     if (
-      (row.provider || c.EMAIL_PROVIDER) === "resend" &&
+      (row.provider || emailProvider(c)) === "resend" &&
       row.channel === "email" &&
       row.attempts > 0 &&
       Date.now() - new Date(row.created_at).getTime() > 23 * 3600000
@@ -52,13 +52,13 @@ export async function dispatchOne(
     }
     await db.query(
       "UPDATE notifications SET status='processing',locked_at=now(),attempts=attempts+1,provider=COALESCE(provider,$2) WHERE id=$1",
-      [row.id, row.channel === "email" ? c.EMAIL_PROVIDER : "whatsapp"],
+      [row.id, row.channel === "email" ? emailProvider(c) : "whatsapp"],
     );
     return {
       ...row,
       provider:
         row.provider ||
-        (row.channel === "email" ? c.EMAIL_PROVIDER : "whatsapp"),
+        (row.channel === "email" ? emailProvider(c) : "whatsapp"),
     };
   });
   if (!job) return false;
@@ -75,7 +75,7 @@ export async function dispatchOne(
             id: job.id,
             provider: job.provider,
             channel: job.channel,
-            email: job.email,
+            email: c.ALERT_RECIPIENT_EMAIL || job.email,
             phone: job.whatsapp_phone,
             title: job.title,
             body: job.body,

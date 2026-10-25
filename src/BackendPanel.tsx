@@ -1,4 +1,5 @@
 import { GmailSettings } from "./GmailSettings";
+import driveFolders2026 from "../imports/drive-licitacoes-2026.json";
 import { useState, useEffect } from "react";
 const api = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "";
 type Procurement = {
@@ -63,8 +64,39 @@ const names = [
   "Portal de Compras Públicas",
   "BBMNET",
 ];
+function zDriveFolders(
+  value: unknown,
+): { id: string; name: string; url: string }[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 100)
+    throw Error("Arquivo deve conter de 1 a 100 pastas.");
+  return value.map((item) => {
+    if (
+      !item ||
+      typeof item.id !== "string" ||
+      typeof item.name !== "string" ||
+      typeof item.url !== "string" ||
+      item.url !== "https://drive.google.com/drive/folders/" + item.id
+    )
+      throw Error("Pasta inválida no arquivo.");
+    return { id: item.id, name: item.name, url: item.url };
+  });
+}
 export function BackendPanel() {
   const [token, setToken] = useState("");
+  const [showSetup, setShowSetup] = useState(false);
+  const [pncpResult, setPncpResult] = useState<any>(null);
+  const [driveFilter, setDriveFilter] = useState("pending");
+  const [driveSearch, setDriveSearch] = useState("");
+  const [driveSelected, setDriveSelected] = useState<string | null>(null);
+  const [driveCandidates, setDriveCandidates] = useState<
+    {
+      id: string;
+      folder_name: string;
+      folder_url: string;
+      review_status: string;
+      outcome_status: string;
+    }[]
+  >([]);
   const [error, setError] = useState("");
   const [status, setStatus] = useState<Status>();
   const [items, setItems] = useState<Procurement[]>([]);
@@ -115,6 +147,8 @@ export function BackendPanel() {
       setStatus(s);
       setItems(p);
       setNotices(n);
+      const candidates = await request("/api/drive/import-candidates");
+      setDriveCandidates(candidates);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Backend indisponível.");
@@ -165,6 +199,69 @@ export function BackendPanel() {
       {!token ? (
         <section className="panel info">
           <h2>Entrar no backend</h2>
+          <div className="demo-banner">
+            <strong>Importação de 2026 disponível após login</strong>
+            <p>
+              Entre com seu e-mail e senha abaixo. O botão “Importar as 74
+              pastas de 2026” aparece imediatamente após entrar.
+            </p>
+          </div>
+          <button
+            className="outline"
+            type="button"
+            onClick={() => setShowSetup(!showSetup)}
+          >
+            Criar primeiro acesso administrativo
+          </button>
+          {showSetup && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const f = new FormData(form);
+                void act(async () => {
+                  await request("/api/auth/initial-setup", "POST", {
+                    email: "rafaelcunha1111@gmail.com",
+                    password: f.get("password"),
+                    setupKey: f.get("setupKey"),
+                  });
+                  form.reset();
+                  setShowSetup(false);
+                  setError(
+                    "Administrador criado. Faça login com a senha cadastrada.",
+                  );
+                });
+              }}
+            >
+              <p>
+                Disponível somente enquanto não existir usuário e com chave de
+                ativação fornecida pelo administrador da hospedagem.
+              </p>
+              <label className="field">
+                Chave de ativação
+                <input
+                  name="setupKey"
+                  type="password"
+                  required
+                  minLength={32}
+                />
+              </label>
+              <label className="field">
+                Crie sua senha (mínimo 14 caracteres)
+                <input
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={14}
+                  maxLength={128}
+                />
+              </label>
+              <button className="outline" disabled={busy}>
+                Criar administrador
+              </button>
+            </form>
+          )}
           <p>
             Usuário provisionado pelo administrador. Token fica somente na
             memória desta página.
@@ -231,6 +328,334 @@ export function BackendPanel() {
               Sair
             </button>
           </div>
+          <section className="panel info">
+            <h2>Importar pastas do Google Drive — 2026</h2>
+            <p>
+              As 74 pastas de 2026 estão preparadas. Clique para enviar à sua
+              fila de conferência, sem ativar monitoramento.
+            </p>
+            <button
+              className="outline"
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  await request("/api/drive/import-candidates", "POST", {
+                    year: 2026,
+                    folders: zDriveFolders(driveFolders2026),
+                  });
+                  await refresh();
+                })
+              }
+            >
+              Importar as 74 pastas de 2026
+            </button>
+            <p>Alternativamente, selecione um arquivo JSON:</p>
+            <input
+              type="file"
+              accept=".json,application/json"
+              disabled={busy}
+              onChange={(e) => {
+                const file = e.currentTarget.files?.[0];
+                if (!file) return;
+                void act(async () => {
+                  const parsed = JSON.parse(await file.text());
+                  const folders = zDriveFolders(parsed);
+                  await request("/api/drive/import-candidates", "POST", {
+                    year: 2026,
+                    folders,
+                  });
+                  await refresh();
+                });
+                e.currentTarget.value = "";
+              }}
+            />
+            <p>
+              <strong>{driveCandidates.length} pastas registradas</strong> ·{" "}
+              {
+                driveCandidates.filter((x) => x.review_status === "pending")
+                  .length
+              }{" "}
+              pendentes ·{" "}
+              {
+                driveCandidates.filter((x) => x.review_status === "imported")
+                  .length
+              }{" "}
+              aprovadas ·{" "}
+              {
+                driveCandidates.filter((x) => x.review_status === "dismissed")
+                  .length
+              }{" "}
+              descartadas
+            </p>
+            <label className="field">
+              Pesquisar licitação ou cidade
+              <input
+                value={driveSearch}
+                onChange={(e) => setDriveSearch(e.target.value)}
+                placeholder="Ex.: PE 58/2026, Arcos"
+              />
+            </label>
+            <label className="field">
+              Situação
+              <select
+                value={driveFilter}
+                onChange={(e) => setDriveFilter(e.target.value)}
+              >
+                <option value="pending">Pendentes</option>
+                <option value="imported">Aprovadas</option>
+                <option value="dismissed">Descartadas</option>
+                <option value="all">Todas</option>
+              </select>
+            </label>
+            <div style={{ maxHeight: 520, overflowY: "auto" }}>
+              {driveCandidates
+                .filter(
+                  (item) =>
+                    (driveFilter === "all" ||
+                      item.review_status === driveFilter) &&
+                    item.folder_name
+                      .toLocaleLowerCase("pt-BR")
+                      .includes(driveSearch.toLocaleLowerCase("pt-BR")),
+                )
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      padding: "12px 0",
+                      borderBottom: "1px solid #ddd",
+                    }}
+                  >
+                    <strong>
+                      <a
+                        href={item.folder_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {item.folder_name}
+                      </a>
+                    </strong>{" "}
+                    —{" "}
+                    {item.review_status === "pending"
+                      ? "Pendente"
+                      : item.review_status === "imported"
+                        ? "Aprovada"
+                        : "Descartada"}
+                    <select
+                      aria-label="Resultado da licitação"
+                      value={item.outcome_status || "unclassified"}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void act(async () => {
+                          await request(
+                            "/api/drive/import-candidates/" +
+                              item.id +
+                              "/outcome",
+                            "POST",
+                            { outcome: e.target.value },
+                          );
+                          await refresh();
+                        })
+                      }
+                    >
+                      <option value="unclassified">Não classificada</option>
+                      <option value="won">Ganha</option>
+                      <option value="lost">Perdida</option>
+                      <option value="in_progress">Em andamento</option>
+                    </select>
+                    {item.review_status === "pending" && (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          marginTop: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            setDriveSelected(
+                              driveSelected === item.id ? null : item.id,
+                            )
+                          }
+                        >
+                          Conferir / aprovar
+                        </button>
+                        <button
+                          type="button"
+                          className="outline"
+                          disabled={busy}
+                          onClick={() => {
+                            if (window.confirm("Descartar esta pasta da fila?"))
+                              void act(async () => {
+                                await request(
+                                  "/api/drive/import-candidates/" +
+                                    item.id +
+                                    "/dismiss",
+                                  "POST",
+                                );
+                                await refresh();
+                              });
+                          }}
+                        >
+                          Descartar
+                        </button>
+                      </div>
+                    )}
+                    {driveSelected === item.id &&
+                      item.review_status === "pending" && (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            const f = new FormData(e.currentTarget);
+                            void act(async () => {
+                              await request(
+                                "/api/drive/import-candidates/" +
+                                  item.id +
+                                  "/approve",
+                                "POST",
+                                {
+                                  portal: String(f.get("portal")),
+                                  externalRef: String(f.get("externalRef")),
+                                  agency: String(f.get("agency")),
+                                  object: String(f.get("object")),
+                                },
+                              );
+                              setDriveSelected(null);
+                              await refresh();
+                            });
+                          }}
+                        >
+                          <p>
+                            Confira edital e TR na pasta antes de aprovar. A
+                            aprovação não ativa o monitoramento.
+                          </p>
+                          <label className="field">
+                            Portal
+                            <select name="portal" required>
+                              {names.map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="field">
+                            Número da licitação
+                            <input
+                              name="externalRef"
+                              defaultValue={item.folder_name.split(" - ")[0]}
+                              required
+                            />
+                          </label>
+                          <label className="field">
+                            Órgão / cidade
+                            <input
+                              name="agency"
+                              defaultValue={item.folder_name
+                                .split(" - ")
+                                .slice(1)
+                                .join(" - ")}
+                              required
+                            />
+                          </label>
+                          <label className="field">
+                            Objeto da licitação
+                            <input
+                              name="object"
+                              required
+                              placeholder="Conforme edital e termo de referência"
+                            />
+                          </label>
+                          <button type="submit" disabled={busy}>
+                            Aprovar sem monitoramento
+                          </button>
+                        </form>
+                      )}
+                  </div>
+                ))}
+            </div>
+          </section>
+          <section className="panel info">
+            <h2>Consulta oficial PNCP — sob demanda</h2>
+            <p>
+              Informe o identificador PNCP da contratação (CNPJ do órgão, ano e
+              sequencial). Consulta manual, sem monitoramento automático. A
+              existência de contrato não comprova que a R&amp;S é a contratada.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                void act(async () => {
+                  setPncpResult(
+                    await request(
+                      "/api/pncp/contratacao/" +
+                        f.get("cnpj") +
+                        "/" +
+                        f.get("ano") +
+                        "/" +
+                        f.get("sequencial"),
+                    ),
+                  );
+                });
+              }}
+            >
+              <label className="field">
+                CNPJ do órgão (14 dígitos)
+                <input
+                  name="cnpj"
+                  inputMode="numeric"
+                  pattern="[0-9]{14}"
+                  required
+                  placeholder="Somente números"
+                />
+              </label>
+              <label className="field">
+                Ano
+                <input
+                  name="ano"
+                  type="number"
+                  min="2020"
+                  max="2100"
+                  defaultValue="2026"
+                  required
+                />
+              </label>
+              <label className="field">
+                Sequencial PNCP
+                <input name="sequencial" type="number" min="1" required />
+              </label>
+              <button className="outline" disabled={busy}>
+                Consultar contratação e contratos
+              </button>
+            </form>
+            {pncpResult && (
+              <div>
+                <p>
+                  Consulta: {timestamp(pncpResult.consultedAt)} · Contratação
+                  HTTP {pncpResult.procurement?.status} · Contratos HTTP{" "}
+                  {pncpResult.contracts?.status}
+                </p>
+                <p>
+                  Dados publicados pelo PNCP (não homologação verificada
+                  automaticamente):
+                </p>
+                <pre
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    maxHeight: 300,
+                    overflow: "auto",
+                    fontSize: 12,
+                  }}
+                >
+                  {JSON.stringify(pncpResult, null, 2)}
+                </pre>
+              </div>
+            )}
+          </section>
           <section className="panel info">
             <h2>Saúde e integrações</h2>
             <p>
@@ -459,6 +884,7 @@ export function BackendPanel() {
               ))}
             </section>
           )}
+          <GmailSettings request={request} />
           <section className="panel info">
             <h2>Preferências de alertas externos</h2>
             <p>

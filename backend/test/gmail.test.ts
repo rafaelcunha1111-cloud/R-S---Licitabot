@@ -139,3 +139,38 @@ test("WhatsApp desativado ignora credenciais presentes sem chamar a rede", async
   assert.equal(result.status, "pending_configuration");
   assert.equal(calls, 0);
 });
+
+test("refresh token já configurado no Render funciona sem chave de banco e sem substituir remetente", async () => {
+  const c = readConfig({
+    DATABASE_URL: "postgresql://localhost/licitabot_test",
+    NODE_ENV: "test",
+    GMAIL_CLIENT_ID: "fixture-client",
+    GMAIL_CLIENT_SECRET: "fixture-secret",
+    GMAIL_REFRESH_TOKEN: "fixture-env-refresh",
+    GMAIL_SENDER_EMAIL: "construcenter.licitacao@gmail.com",
+  });
+  const { emailProvider, emailReady } = await import("../src/config.js");
+  assert.equal(emailProvider(c), "gmail");
+  assert.equal(emailReady(c), true);
+  let calls = 0;
+  const result = await sendGmail(
+    {
+      query: () => {
+        throw Error("database not needed");
+      },
+    } as any,
+    c,
+    fixture,
+    async (_url, init) => {
+      if (++calls === 1) {
+        assert.equal(
+          (init?.body as URLSearchParams).get("refresh_token"),
+          "fixture-env-refresh",
+        );
+        return new Response(JSON.stringify({ access_token: "fixture-access" }));
+      }
+      return new Response(JSON.stringify({ id: "fixture-gmail-id" }));
+    },
+  );
+  assert.equal(result.status, "provider_accepted");
+});

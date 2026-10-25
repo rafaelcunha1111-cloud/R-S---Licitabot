@@ -18,7 +18,10 @@ const envSchema = z.object({
   // Non-secret platform marker injected by Render.
   RENDER: z.enum(["true", "false"]).optional(),
   DATABASE_CA_CERT: z.string().optional(),
-  EMAIL_PROVIDER: z.enum(["resend", "gmail"]).default("resend"),
+  INITIAL_ADMIN_SETUP_KEY: z.string().min(32).optional(),
+  GMAIL_REFRESH_TOKEN: z.string().optional(),
+  GMAIL_OPERATOR_EMAIL: z.string().email().default("rafaelcunha1111@gmail.com"),
+  EMAIL_PROVIDER: z.enum(["auto", "resend", "gmail"]).default("auto"),
   GMAIL_CLIENT_ID: z.string().optional(),
   GMAIL_CLIENT_SECRET: z.string().optional(),
   GMAIL_REDIRECT_URI: z.string().url().optional(),
@@ -33,6 +36,7 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
+  ALERT_RECIPIENT_EMAIL: z.string().email().optional(),
   RESEND_WEBHOOK_SECRET: z.string().optional(),
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().regex(/^\d+$/).optional(),
@@ -82,13 +86,22 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw Error("Produção exige FRONTEND_ORIGIN HTTPS.");
   return c;
 }
+export const emailProvider = (c: Config): "gmail" | "resend" =>
+  c.EMAIL_PROVIDER === "auto"
+    ? c.GMAIL_CLIENT_ID &&
+      c.GMAIL_CLIENT_SECRET &&
+      (c.GMAIL_REFRESH_TOKEN ||
+        (c.GMAIL_REDIRECT_URI && c.GMAIL_TOKEN_ENCRYPTION_KEY))
+      ? "gmail"
+      : "resend"
+    : c.EMAIL_PROVIDER;
 export const emailReady = (c: Config) =>
-  c.EMAIL_PROVIDER === "gmail"
+  emailProvider(c) === "gmail"
     ? Boolean(
         c.GMAIL_CLIENT_ID &&
         c.GMAIL_CLIENT_SECRET &&
-        c.GMAIL_REDIRECT_URI &&
-        c.GMAIL_TOKEN_ENCRYPTION_KEY,
+        (c.GMAIL_REFRESH_TOKEN ||
+          (c.GMAIL_REDIRECT_URI && c.GMAIL_TOKEN_ENCRYPTION_KEY)),
       )
     : Boolean(c.RESEND_API_KEY && c.EMAIL_FROM);
 export const whatsappReady = (c: Config) =>

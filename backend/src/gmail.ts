@@ -182,35 +182,35 @@ export async function sendGmail(
   n: Delivery,
   request: typeof fetch = fetch,
 ): Promise<SendResult> {
-  if (
-    !c.GMAIL_CLIENT_ID ||
-    !c.GMAIL_CLIENT_SECRET ||
-    !c.GMAIL_TOKEN_ENCRYPTION_KEY
-  )
+  if (!c.GMAIL_CLIENT_ID || !c.GMAIL_CLIENT_SECRET)
     return {
       status: "pending_configuration",
       code: "gmail_pending_configuration",
     };
-  const account = (
-    await pool.query(
-      "SELECT refresh_token_encrypted FROM gmail_accounts WHERE email=$1",
-      [c.GMAIL_SENDER_EMAIL],
-    )
-  ).rows[0];
-  if (!account)
+  let refreshToken = c.GMAIL_REFRESH_TOKEN;
+  if (c.GMAIL_TOKEN_ENCRYPTION_KEY) {
+    const account = (
+      await pool.query(
+        "SELECT refresh_token_encrypted FROM gmail_accounts WHERE email=$1",
+        [c.GMAIL_SENDER_EMAIL],
+      )
+    ).rows[0];
+    if (account) {
+      try {
+        refreshToken = decryptSecret(
+          account.refresh_token_encrypted,
+          c.GMAIL_TOKEN_ENCRYPTION_KEY,
+        );
+      } catch {
+        return { status: "pending_configuration", code: "gmail_key_mismatch" };
+      }
+    }
+  }
+  if (!refreshToken)
     return {
       status: "pending_configuration",
       code: "gmail_authorization_required",
     };
-  let refreshToken: string;
-  try {
-    refreshToken = decryptSecret(
-      account.refresh_token_encrypted,
-      c.GMAIL_TOKEN_ENCRYPTION_KEY,
-    );
-  } catch {
-    return { status: "pending_configuration", code: "gmail_key_mismatch" };
-  }
   let accessToken: string;
   try {
     const response = await request("https://oauth2.googleapis.com/token", {

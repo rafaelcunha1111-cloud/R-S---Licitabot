@@ -173,6 +173,10 @@ test(
       await t.test(
         "conector pendente registra bloqueio sem sucesso e agenda mínimo de 5 minutos",
         async () => {
+          await pool.query(
+            "UPDATE procurements SET monitoring_enabled=true WHERE id=$1",
+            [id],
+          );
           await schedulerTick(pool);
           const result = (
             await pool.query("SELECT * FROM procurements WHERE id=$1", [id])

@@ -8,6 +8,9 @@ const files = execFileSync(
   .split("\0")
   .filter(Boolean);
 const rules = [
+  ["google-refresh-token", /\b1\/\/[A-Za-z0-9_-]{30,}/],
+  ["google-access-token", /\bya29\.[A-Za-z0-9_-]{30,}/],
+  ["google-client-secret", /\bGOCSPX-[A-Za-z0-9_-]{20,}/],
   ["private-key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ["github-token", /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b/],
   ["aws-key", /\bAKIA[0-9A-Z]{16}\b/],

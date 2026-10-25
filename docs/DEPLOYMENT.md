@@ -116,3 +116,7 @@ Antes de declarar 24h ativo:
 5. Homologar interface oficial do Comprasnet com o responsável, implementar adaptador e seus testes de contrato; só então habilitar coleta. Validar dados reais e horário de última consulta com evidências, sem inserir fixtures na produção.
 6. Testar 401, isolamento entre usuários, CORS, revogação, assinatura de webhooks, limites de requisição, falha de banco, reinício do worker e alarmes operacionais. Executar CI sem skips.
 7. Observar operação contínua e alertas externos durante uma janela acordada. Uma máquina local, teste de unidade, deploy de Pages ou heartbeat isolado não prova monitoramento 24h.
+
+## Gmail em vez de Resend
+
+A configuração existente por refresh token no Render foi preservada, com novo fluxo OAuth seguro opcional no painel. Para a conta `construcenter.licitacao@gmail.com`, callback, variáveis, consentimento e teste real, seguir [GMAIL.md](GMAIL.md). Manter `WHATSAPP_ENABLED=false`; sem configuração e consentimento Google não há confirmação de envio. A conta Gmail pessoal possui limites de envio e não deve ser tratada como infraestrutura de e-mail transacional ilimitada.

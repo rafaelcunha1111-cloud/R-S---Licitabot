@@ -58,3 +58,7 @@ O dashboard existente no Pages foi preservado. A nova aba **Servidor** acessa a 
 - [Estado e homologação das integrações oficiais](docs/PORTALS.md)
 - [Segurança, testes e pendências](docs/SECURITY.md)
 - [Variáveis do backend, sem segredos](backend/.env.example)
+
+## Alertas via Gmail OAuth
+
+Integração Gmail API com consentimento da conta, tokens criptografados no PostgreSQL, renovação automática e teste para a própria conta remetente. O caminho existente por `GMAIL_REFRESH_TOKEN` no Render foi preservado. WhatsApp está desativado por padrão (`WHATSAPP_ENABLED=false`). Configuração real do projeto Google/OAuth, consentimento e teste de e-mail ainda precisam ser concluídos na conta autorizada: [roteiro Gmail e Render](docs/GMAIL.md). Nenhuma configuração de conta Google é presumida apenas pelo código estar publicado.

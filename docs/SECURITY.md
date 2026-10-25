@@ -31,3 +31,7 @@ Sem `TEST_DATABASE_URL`, o teste de integração é explicitamente **skipped**, 
 ## Pendências antes de produção real
 
 Homologar todos os provedores e acessos, testar HTTPS/TLS reais e o proxy, validar consentimento/endereços de destinatários, configurar alertas de operação e restauração de backup, retenção/LGPD e procedimento de incidentes. Para equipe maior, integrar IdP com MFA/recuperação e papéis administrativos; revisar rate limit compartilhado caso aumente réplicas. Testes de carga/penetração e análise da infraestrutura externa ainda não foram executados. Não há upload de certificado, senha ou sessão de portal no frontend.
+
+## Gmail OAuth e WhatsApp
+
+O fluxo Gmail solicita somente envio (`gmail.send`) e identidade (`openid email`), protege o retorno com state de uso único/PKCE e valida o ID token pela biblioteca oficial Google. Refresh tokens obtidos no painel são criptografados AES-256-GCM com chave externa ao banco. Credenciais Gmail anteriores no Environment do Render continuam suportadas; não são publicadas nem devolvidas ao frontend. A identidade/escopos de um refresh token legado devem ser confirmados pelo operador no Google. WhatsApp fica desativado por padrão e bloqueado também na fila, mesmo com tokens antigos. O Gmail não oferece a chave de idempotência do Resend; envio de resultado incerto é registrado como desconhecido sem reenvio cego. Mais detalhes em [GMAIL.md](GMAIL.md).
