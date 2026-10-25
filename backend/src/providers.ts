@@ -27,7 +27,37 @@ export async function sendNotification(
     return { status: "pending_configuration", code: "provider_not_configured" };
   let response: Response;
   try {
-    if (n.channel === "email")
+    if (n.channel === "email" && c.GMAIL_CLIENT_ID && c.GMAIL_CLIENT_SECRET && c.GMAIL_REFRESH_TOKEN && c.GMAIL_SENDER_EMAIL) {
+      const tokenResponse = await request("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        signal: AbortSignal.timeout(10000),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: c.GMAIL_CLIENT_ID,
+          client_secret: c.GMAIL_CLIENT_SECRET,
+          refresh_token: c.GMAIL_REFRESH_TOKEN,
+          grant_type: "refresh_token",
+        }).toString(),
+      });
+      if (!tokenResponse.ok) return { status: "pending_configuration", code: "gmail_authorization_required" };
+      const token = (await tokenResponse.json()) as { access_token?: string };
+      if (!token.access_token) return { status: "pending_configuration", code: "gmail_token_missing" };
+      const mime = [
+        "From: " + c.GMAIL_SENDER_EMAIL,
+        "To: " + n.email,
+        "Subject: =?UTF-8?B?" + Buffer.from(n.title).toString("base64") + "?=",
+        "MIME-Version: 1.0",
+        "Content-Type: text/plain; charset=UTF-8",
+        "",
+        n.body,
+      ].join("\r\n");
+      response = await request("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        signal: AbortSignal.timeout(10000),
+        headers: { Authorization: "Bearer " + token.access_token, "Content-Type": "application/json" },
+        body: JSON.stringify({ raw: Buffer.from(mime).toString("base64url") }),
+      });
+    } else if (n.channel === "email")
       response = await request("https://api.resend.com/emails", {
         method: "POST",
         signal: AbortSignal.timeout(10000),
