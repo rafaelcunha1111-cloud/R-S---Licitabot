@@ -261,6 +261,22 @@ export function createApp(pool: pg.Pool, c: Config) {
     if ("error" in result) { res.status(409).json(result); return; }
     res.status(201).json(result);
   });
+  app.get("/api/pncp/contratacao/:cnpj/:ano/:sequencial", async (req, res) => {
+    const cnpj = z.string().regex(/^\\d{14}$/).parse(req.params.cnpj);
+    const ano = z.coerce.number().int().min(2020).max(2100).parse(req.params.ano);
+    const sequencial = z.coerce.number().int().positive().parse(req.params.sequencial);
+    const base = "https://pncp.gov.br/api/pncp/v1/orgaos/" + cnpj;
+    const paths = ["/compras/"+ano+"/"+sequencial, "/contratos/contratacao/"+ano+"/"+sequencial];
+    const results = await Promise.all(paths.map(async path => {
+      try {
+        const response = await fetch(base+path, {headers:{Accept:"application/json"},signal:AbortSignal.timeout(10000)});
+        if (!response.ok) return {status:response.status,data:null};
+        const data: unknown = await response.json();
+        return {status:200,data};
+      } catch {return {status:0,data:null};}
+    }));
+    res.json({source:"PNCP",consultedAt:new Date().toISOString(),procurement:results[0],contracts:results[1]});
+  });
   app.post("/api/drive/import-candidates/:id/outcome", async (req, res) => {
     const outcome = z.enum(["unclassified","won","lost","in_progress"]).parse(req.body.outcome);
     await pool.query("UPDATE drive_import_candidates SET outcome_status=$1 WHERE id=$2 AND user_id=$3", [outcome,uuid.parse(req.params.id),res.locals.userId]);
