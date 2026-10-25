@@ -73,6 +73,7 @@ function zDriveFolders(value:unknown): {id:string;name:string;url:string}[] {
 export function BackendPanel() {
   const [token, setToken] = useState("");
   const [showSetup, setShowSetup] = useState(false);
+  const [pncpResult, setPncpResult] = useState<any>(null);
   const [driveFilter, setDriveFilter] = useState("pending");
   const [driveSearch, setDriveSearch] = useState("");
   const [driveSelected, setDriveSelected] = useState<string | null>(null);
@@ -285,6 +286,20 @@ export function BackendPanel() {
                 </form>}
               </div>)}
             </div>
+          </section>
+          <section className="panel info">
+            <h2>Consulta oficial PNCP — sob demanda</h2>
+            <p>Informe o identificador PNCP da contratação (CNPJ do órgão, ano e sequencial). Consulta manual, sem monitoramento automático. A existência de contrato não comprova que a R&amp;S é a contratada.</p>
+            <form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);void act(async()=>{setPncpResult(await request("/api/pncp/contratacao/"+f.get("cnpj")+"/"+f.get("ano")+"/"+f.get("sequencial")));});}}>
+              <label className="field">CNPJ do órgão (14 dígitos)<input name="cnpj" inputMode="numeric" pattern="[0-9]{14}" required placeholder="Somente números"/></label>
+              <label className="field">Ano<input name="ano" type="number" min="2020" max="2100" defaultValue="2026" required/></label>
+              <label className="field">Sequencial PNCP<input name="sequencial" type="number" min="1" required/></label>
+              <button className="outline" disabled={busy}>Consultar contratação e contratos</button>
+            </form>
+            {pncpResult&&<div><p>Consulta: {timestamp(pncpResult.consultedAt)} · Contratação HTTP {pncpResult.procurement?.status} · Contratos HTTP {pncpResult.contracts?.status}</p>
+              <p>Dados publicados pelo PNCP (não homologação verificada automaticamente):</p>
+              <pre style={{whiteSpace:"pre-wrap",maxHeight:300,overflow:"auto",fontSize:12}}>{JSON.stringify(pncpResult,null,2)}</pre>
+            </div>}
           </section>
           <section className="panel info">
             <h2>Saúde e integrações</h2>
