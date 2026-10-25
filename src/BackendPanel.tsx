@@ -62,9 +62,17 @@ const names = [
   "Portal de Compras Públicas",
   "BBMNET",
 ];
+function zDriveFolders(value:unknown): {id:string;name:string;url:string}[] {
+  if (!Array.isArray(value) || value.length<1 || value.length>100) throw Error("Arquivo deve conter de 1 a 100 pastas.");
+  return value.map(item=>{
+    if (!item || typeof item.id!=="string" || typeof item.name!=="string" || typeof item.url!=="string" || item.url!=="https://drive.google.com/drive/folders/"+item.id) throw Error("Pasta inválida no arquivo.");
+    return {id:item.id,name:item.name,url:item.url};
+  });
+}
 export function BackendPanel() {
   const [token, setToken] = useState("");
   const [showSetup, setShowSetup] = useState(false);
+  const [driveCandidates, setDriveCandidates] = useState<{id:string;folder_name:string;folder_url:string;review_status:string}[]>([]);
   const [error, setError] = useState("");
   const [status, setStatus] = useState<Status>();
   const [items, setItems] = useState<Procurement[]>([]);
@@ -115,6 +123,8 @@ export function BackendPanel() {
       setStatus(s);
       setItems(p);
       setNotices(n);
+      const candidates = await request("/api/drive/import-candidates");
+      setDriveCandidates(candidates);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Backend indisponível.");
@@ -233,6 +243,25 @@ export function BackendPanel() {
               Sair
             </button>
           </div>
+          <section className="panel info">
+            <h2>Importar pastas do Google Drive — 2026</h2>
+            <p>Selecione um arquivo JSON de pastas. Todas entram como pendentes de revisão, sem ativar monitoramento.</p>
+            <input type="file" accept=".json,application/json" disabled={busy} onChange={e => {
+              const file=e.currentTarget.files?.[0];
+              if (!file) return;
+              void act(async () => {
+                const parsed=JSON.parse(await file.text());
+                const folders=zDriveFolders(parsed);
+                await request("/api/drive/import-candidates","POST",{year:2026,folders});
+                await refresh();
+              });
+              e.currentTarget.value="";
+            }}/>
+            <p>{driveCandidates.length} pastas recebidas para conferência.</p>
+            <div style={{maxHeight:360,overflowY:"auto"}}>
+              {driveCandidates.map(item=><p key={item.id}><a href={item.folder_url} target="_blank" rel="noopener noreferrer">{item.folder_name}</a> — {item.review_status}</p>)}
+            </div>
+          </section>
           <section className="panel info">
             <h2>Saúde e integrações</h2>
             <p>
