@@ -21,6 +21,7 @@ const envSchema = z.object({
   INITIAL_ADMIN_SETUP_KEY: z.string().min(32).optional(),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
+  ALERT_RECIPIENT_EMAIL: z.string().email().optional(),
   RESEND_WEBHOOK_SECRET: z.string().optional(),
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().regex(/^\d+$/).optional(),
