@@ -96,3 +96,8 @@ O ano aparece quando informado pela fonte. A consulta avançada PNCP permanece
 recolhida. Não há filtros fictícios de participação da empresa, etapa em disputa,
 ME/EPP ou chat: a API usada não fornece a mesma pesquisa de sessões autenticadas
 da captura de tela. Nenhuma credencial de portal é solicitada.
+
+A pesquisa agora inicia com o ano de publicação inteiro, editável. As datas são
+as de publicação, não de abertura da sessão. Em resposta vazia, o usuário pode
+ampliar explicitamente para o ano inteiro ou retirar o filtro de número. Essas
+ações não substituem 72 por 90072 e não confirmam um registro ausente.
