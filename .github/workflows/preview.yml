@@ -20,7 +20,7 @@ jobs:
       - run: npm ci
       - run: npm run security:secrets && npm run check && npm test && npm run build:preview
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://rs-licitabot-api.onrender.com' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist-preview

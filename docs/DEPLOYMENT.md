@@ -120,3 +120,7 @@ Antes de declarar 24h ativo:
 ## Gmail em vez de Resend
 
 A configuração existente por refresh token no Render foi preservada, com novo fluxo OAuth seguro opcional no painel. Para a conta `construcenter.licitacao@gmail.com`, callback, variáveis, consentimento e teste real, seguir [GMAIL.md](GMAIL.md). Manter `WHATSAPP_ENABLED=false`; sem configuração e consentimento Google não há confirmação de envio. A conta Gmail pessoal possui limites de envio e não deve ser tratada como infraestrutura de e-mail transacional ilimitada.
+
+## URL padrão do frontend
+
+O workflow de Pages usa `https://rs-licitabot-api.onrender.com` como URL pública padrão da API. A repository variable `VITE_API_URL`, se definida, tem prioridade para permitir trocar o backend. Não é necessário criá-la para usar o serviço atual. O endereço é incorporado no build; a publicação precisa concluir antes de o navegador receber a alteração. Nenhum segredo é incluído nessa variável.
