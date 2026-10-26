@@ -1,3 +1,4 @@
+import { oauthDiagnostic } from "./gmail-diagnostics.js";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { randomUUID } from "node:crypto";
@@ -12,6 +13,16 @@ export function gmailCallback(pool: pg.Pool, c: Config) {
   const router = Router();
   router.get("/gmail/callback", async (req, res) => {
     res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+    if (req.query.error !== undefined) {
+      const diagnostic = oauthDiagnostic(Error("oauth_access_denied"));
+      res
+        .status(400)
+        .type("text")
+        .send(
+          `Não foi possível autorizar o Gmail. Código: ${diagnostic.code}\n${diagnostic.guidance}`,
+        );
+      return;
+    }
     if (
       typeof req.query.state !== "string" ||
       typeof req.query.code !== "string" ||
@@ -38,12 +49,14 @@ export function gmailCallback(pool: pg.Pool, c: Config) {
         .send(
           "Gmail autorizado. Feche esta janela e retorne ao painel. Nenhum envio de teste foi realizado automaticamente.",
         );
-    } catch {
+    } catch (error) {
+      const diagnostic = oauthDiagnostic(error);
+      console.warn("gmail_oauth_failed", diagnostic.code);
       res
         .status(400)
         .type("text")
         .send(
-          "Não foi possível autorizar o Gmail. Confira a conta, o consentimento e a configuração; inicie uma nova autorização.",
+          `Não foi possível autorizar o Gmail. Código: ${diagnostic.code}\n${diagnostic.guidance}`,
         );
     }
   });
@@ -70,7 +83,15 @@ export function gmailRoutes(pool: pg.Pool, c: Config) {
         [c.GMAIL_SENDER_EMAIL],
       )
     ).rows[0];
+    const missingVariables = [
+      "GMAIL_CLIENT_ID",
+      "GMAIL_CLIENT_SECRET",
+      "GMAIL_REDIRECT_URI",
+      "GMAIL_TOKEN_ENCRYPTION_KEY",
+    ].filter((name) => !c[name as keyof Config]);
     res.json({
+      oauthReady: missingVariables.length === 0,
+      missingVariables,
       provider: c.EMAIL_PROVIDER,
       authorized: Boolean(row || c.GMAIL_REFRESH_TOKEN),
       tokenSource: row
@@ -94,11 +115,9 @@ export function gmailRoutes(pool: pg.Pool, c: Config) {
   });
   router.post("/disconnect", async (_req, res) => {
     if (c.GMAIL_REFRESH_TOKEN) {
-      res
-        .status(409)
-        .json({
-          error: "remove_environment_refresh_token_in_render_before_disconnect",
-        });
+      res.status(409).json({
+        error: "remove_environment_refresh_token_in_render_before_disconnect",
+      });
       return;
     }
     await pool.query("DELETE FROM gmail_oauth_states WHERE user_id=$1", [

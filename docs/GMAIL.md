@@ -63,3 +63,21 @@ O botão Desconectar remove tokens OAuth do banco e estados pendentes. Se houver
 - `GET /oauth/gmail/callback`: público por necessidade OAuth, protegido por state aleatório com expiração, PKCE e verificação da identidade Google. Resposta sem tokens, `no-store` e `no-referrer`.
 - A senha Google nunca é solicitada pelo backend. Logs do proxy/Render não devem registrar query strings OAuth; revisar a política de logs do ambiente. Códigos OAuth são temporários, de uso único e vinculados ao verifier, mas não devem ser compartilhados.
 - Não registrar corpos das respostas Google, Client secret, access/refresh tokens, chaves de criptografia ou headers Authorization. O botão de desconexão não apaga o histórico de alertas.
+
+## Falha no retorno OAuth
+
+O callback agora mostra somente um código seguro e uma orientação específica, e registra apenas esse código nos logs (`gmail_oauth_failed`). Nunca pedir a URL completa do callback ou a resposta bruta do Google: elas podem conter dados temporários de autorização.
+
+| Código                                                              | Próximo passo                                                                                                                                    |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `invalid_oauth_state`                                               | Preparar novo link no painel e concluir em até dez minutos; não atualizar a página do callback nem reutilizar link antigo.                       |
+| `oauth_invalid_client`                                              | Conferir se o ID e o novo segredo no Render pertencem ao mesmo cliente Web; salvar/redeploy.                                                     |
+| `oauth_invalid_grant`                                               | Gerar novo link. Se persistir, conferir retorno OAuth e coerência da configuração; código expirado/usado e PKCE também podem causar essa recusa. |
+| `oauth_key_mismatch`                                                | Manter a mesma chave de criptografia na API entre geração do link e callback e iniciar novamente.                                                |
+| `wrong_google_account`                                              | Escolher a conta de GMAIL_SENDER_EMAIL, prevista como construcenter.licitacao@gmail.com.                                                         |
+| `offline_send_permission_missing`                                   | Conferir que o consentimento concedeu gmail.send.                                                                                                |
+| `oauth_refresh_token_missing`                                       | Refazer consentimento offline por novo link.                                                                                                     |
+| `oauth_token_network_error` ou `oauth_identity_verification_failed` | Verificar conectividade/identidade no servidor; nunca desativar validação TLS ou do ID token.                                                    |
+| `oauth_state_storage_failed` ou `oauth_token_storage_failed`        | Verificar migrations e conexão PostgreSQL.                                                                                                       |
+
+A seção Gmail do painel mostra os nomes das variáveis OAuth ausentes, sem seus valores, e bloqueia a preparação enquanto a configuração estiver incompleta. Essa melhoria de diagnóstico não confirma a causa de uma falha anterior nem conclui autorização/envio real automaticamente. Fazer deploy da API para obter o novo código antes de repetir o fluxo.

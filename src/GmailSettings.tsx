@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 type GmailStatus = {
   authorized: boolean;
+  oauthReady?: boolean;
+  missingVariables?: string[];
   sender: string;
   connectedAt: string | null;
   whatsappEnabled: boolean;
@@ -52,9 +54,16 @@ export function GmailSettings({
             {status.authorized ? "Autorizada" : "Autorização pendente"} •
             WhatsApp: {status.whatsappEnabled ? "habilitado" : "desativado"}
           </p>
+          {status.oauthReady === false && (
+            <p role="alert">
+              Configuração OAuth incompleta no Render:{" "}
+              {status.missingVariables?.join(", ")}. Preencha essas variáveis e
+              faça redeploy, sem compartilhar os valores secretos.
+            </p>
+          )}
           <button
             className="outline"
-            disabled={busy}
+            disabled={busy || status.oauthReady === false}
             onClick={() =>
               void act(async () => {
                 const data = await request("/api/gmail/authorize", "POST");

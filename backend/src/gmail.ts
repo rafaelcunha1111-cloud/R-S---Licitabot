@@ -4,6 +4,7 @@ import {
   randomBytes,
   createHash,
 } from "node:crypto";
+import { googleExchangeError } from "./gmail-diagnostics.js";
 import { OAuth2Client } from "google-auth-library";
 import type pg from "pg";
 import type { Config } from "./config.js";
@@ -102,55 +103,84 @@ export async function completeGmailAuthorization(
     !c.GMAIL_REDIRECT_URI
   )
     throw Error("gmail_pending_configuration");
-  const entry = (
-    await pool.query(
-      "DELETE FROM gmail_oauth_states WHERE state_hash=$1 AND expires_at>now() RETURNING *",
-      [stateHash(state)],
-    )
-  ).rows[0];
+  let entry;
+  try {
+    entry = (
+      await pool.query(
+        "DELETE FROM gmail_oauth_states WHERE state_hash=$1 AND expires_at>now() RETURNING *",
+        [stateHash(state)],
+      )
+    ).rows[0];
+  } catch {
+    throw Error("oauth_state_storage_failed");
+  }
   if (!entry) throw Error("invalid_oauth_state");
-  const response = await request("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    signal: AbortSignal.timeout(10000),
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: c.GMAIL_CLIENT_ID,
-      client_secret: c.GMAIL_CLIENT_SECRET,
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: c.GMAIL_REDIRECT_URI,
-      code_verifier: decryptSecret(
-        entry.verifier_encrypted,
-        c.GMAIL_TOKEN_ENCRYPTION_KEY,
-      ),
-    }),
-  });
-  if (!response.ok) throw Error("oauth_exchange_failed");
+  let verifier: string;
+  try {
+    verifier = decryptSecret(
+      entry.verifier_encrypted,
+      c.GMAIL_TOKEN_ENCRYPTION_KEY,
+    );
+  } catch {
+    throw Error("oauth_key_mismatch");
+  }
+  let response: Response;
+  try {
+    response = await request("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      signal: AbortSignal.timeout(10000),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: c.GMAIL_CLIENT_ID,
+        client_secret: c.GMAIL_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: c.GMAIL_REDIRECT_URI,
+        code_verifier: verifier,
+      }),
+    });
+  } catch {
+    throw Error("oauth_token_network_error");
+  }
+  if (!response.ok) {
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {}
+    throw googleExchangeError(data);
+  }
   const token = (await response.json()) as {
     refresh_token?: string;
     id_token?: string;
     scope?: string;
   };
-  if (
-    !token.id_token ||
-    !token.refresh_token ||
-    !token.scope?.split(" ").includes(gmailScopes[2])
-  )
+  if (!token.id_token) throw Error("oauth_id_token_missing");
+  if (!token.refresh_token) throw Error("oauth_refresh_token_missing");
+  if (!token.scope?.split(" ").includes(gmailScopes[2]))
     throw Error("offline_send_permission_missing");
-  const identity = await verify(token.id_token, c.GMAIL_CLIENT_ID);
+  let identity: Awaited<ReturnType<VerifyIdentity>>;
+  try {
+    identity = await verify(token.id_token, c.GMAIL_CLIENT_ID);
+  } catch {
+    throw Error("oauth_identity_verification_failed");
+  }
   if (
     !identity.email_verified ||
     identity.email?.toLowerCase() !== c.GMAIL_SENDER_EMAIL.toLowerCase()
   )
     throw Error("wrong_google_account");
-  await pool.query(
-    "INSERT INTO gmail_accounts(email,refresh_token_encrypted,connected_by) VALUES($1,$2,$3) ON CONFLICT(email) DO UPDATE SET refresh_token_encrypted=excluded.refresh_token_encrypted,connected_by=excluded.connected_by,connected_at=now()",
-    [
-      c.GMAIL_SENDER_EMAIL,
-      encryptSecret(token.refresh_token, c.GMAIL_TOKEN_ENCRYPTION_KEY),
-      entry.user_id,
-    ],
-  );
+  try {
+    await pool.query(
+      "INSERT INTO gmail_accounts(email,refresh_token_encrypted,connected_by) VALUES($1,$2,$3) ON CONFLICT(email) DO UPDATE SET refresh_token_encrypted=excluded.refresh_token_encrypted,connected_by=excluded.connected_by,connected_at=now()",
+      [
+        c.GMAIL_SENDER_EMAIL,
+        encryptSecret(token.refresh_token, c.GMAIL_TOKEN_ENCRYPTION_KEY),
+        entry.user_id,
+      ],
+    );
+  } catch {
+    throw Error("oauth_token_storage_failed");
+  }
 }
 export function gmailRaw(c: Config, n: Delivery) {
   if (
