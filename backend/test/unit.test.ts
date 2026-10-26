@@ -111,12 +111,15 @@ test("webhook Meta exige assinatura válida sem aceitar corpo adulterado", () =>
   assert.equal(validMetaSignature(body, undefined, secret), false);
 });
 test("nenhum portal finge conexão ou sucesso sem homologação", () => {
-  assert.equal(productionConnectors.size, 0);
+  assert.equal(productionConnectors.size, 1);
   assert.equal(portalStatus.length, 7);
   assert.ok(
     portalStatus.every(
       (p) =>
-        !p.collectsMessages && p.status === "pending_authorized_integration",
+        !p.collectsMessages &&
+        (p.portal === "Comprasnet"
+          ? p.status === "public_contract_data_available"
+          : p.status === "pending_authorized_integration"),
     ),
   );
 });

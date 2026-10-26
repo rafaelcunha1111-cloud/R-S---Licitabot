@@ -62,3 +62,7 @@ O dashboard existente no Pages foi preservado. A nova aba **Servidor** acessa a 
 ## Alertas via Gmail OAuth
 
 Integração Gmail API com consentimento da conta, tokens criptografados no PostgreSQL, renovação automática e teste para a própria conta remetente. O caminho existente por `GMAIL_REFRESH_TOKEN` no Render foi preservado. WhatsApp está desativado por padrão (`WHATSAPP_ENABLED=false`). Configuração real do projeto Google/OAuth, consentimento e teste de e-mail ainda precisam ser concluídos na conta autorizada: [roteiro Gmail e Render](docs/GMAIL.md). Nenhuma configuração de conta Google é presumida apenas pelo código estar publicado.
+
+## Compras.gov.br: primeira integração pública
+
+Consulta oficial e importação por ID da compra/número de controle PNCP, snapshots PostgreSQL e verificação opcional de alterações públicas pelo worker. O transporte foi validado com uma contratação real, somente leitura, sem importar dados no banco do usuário. **Não coleta mensagens, chat, convocações ou sessão ao vivo.** Escopo, evidências e instruções de uso/deploy: [docs/COMPRASGOV.md](docs/COMPRASGOV.md).

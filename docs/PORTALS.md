@@ -1,6 +1,6 @@
 # Integrações oficiais e estado de acesso
 
-Não há conector de coleta habilitado. Não se presume autorização para scraping, login automatizado ou leitura de chat porque o edital é público. Não há contorno de CAPTCHA/MFA, certificado ou restrição de sessão. Não se enviam lances ou documentos.
+Há um conector de leitura de dados públicos do Compras.gov.br; chat e convocações continuam sem conector homologado. Consulte [COMPRASGOV.md](COMPRASGOV.md) para o escopo implementado e as evidências. Não se presume autorização para scraping, login automatizado ou leitura de chat porque o edital é público. Não há contorno de CAPTCHA/MFA, certificado ou restrição de sessão. Não se enviam lances ou documentos.
 
 | Prioridade | Portal                      | Dados potencialmente públicos                                                                                                                                                          | Mensagens/convocações e acesso                                                                                                                                          |
 | ---------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -19,7 +19,7 @@ Pontos oficiais para iniciar a validação Compras.gov.br:
 - https://www.gov.br/compras/pt-br/acesso-a-informacao/dados-abertos
 - https://dadosabertos.compras.gov.br/swagger-ui/index.html
 
-A consulta dessas páginas no ambiente de desenvolvimento retornou bloqueio do proxy (403); seu conteúdo atual não foi inspecionado nesta entrega. Não atribuir esse bloqueio a credenciais do usuário ou à indisponibilidade do serviço. O projeto não implementa endpoints inferidos e não solicita senha do Comprasnet.
+O acesso antes bloqueado foi liberado. A especificação oficial e uma consulta pública foram inspecionadas e verificadas na primeira fase descrita em COMPRASGOV.md. Não se implementam endpoints inferidos ou autenticação de sessão. O projeto não solicita senha do Comprasnet.
 
 ## Homologação do primeiro conector
 
@@ -28,6 +28,6 @@ A consulta dessas páginas no ambiente de desenvolvimento retornou bloqueio do p
 3. Implementar `AuthorizedConnector.collect` em `backend/src/portals.ts` (preferir novo módulo). Somente o backend lê segredos pelo ambiente/cofre. Não aceitar URL arbitrária de usuário: destinos devem ser oficiais e fixos (proteção SSRF).
 4. Respeitar `AbortSignal`, timeout de 20s e limites mais restritivos que cinco minutos, quando aplicáveis. Uma coleta parcial/erro de autenticação nunca pode retornar uma lista vazia como se fosse sucesso.
 5. Criar testes de contrato com fixtures identificadas como teste e homologação externa autorizada. Validar o conteúdo real e campo de origem antes de registrar o adaptador no `productionConnectors`.
-6. Atualizar metadados `portalStatus`, indicadores de monitoramento e documentação somente após evidência real. Atualmente `monitoringActive=false` é intencional e todos os adaptadores de produção estão ausentes.
+6. Atualizar metadados `portalStatus`, indicadores de monitoramento e documentação somente após evidência real. Atualmente `monitoringActive=false` continua indicando que não há monitoramento de mensagens/convocações. O único adaptador de produção é de dados públicos do Compras.gov.br, ativado por referência oficial e opção do usuário.
 
 A detecção, persistência e deduplicação de mensagens/convocações foram exercitadas com um adaptador injetado exclusivamente no teste PostgreSQL. Isso valida a infraestrutura de ingestão; não valida acesso ou coleta do Comprasnet.

@@ -1,3 +1,4 @@
+import { ComprasgovPanel } from "./ComprasgovPanel";
 import { GmailSettings } from "./GmailSettings";
 import driveFolders2026 from "../imports/drive-licitacoes-2026.json";
 import { useState, useEffect } from "react";
@@ -38,6 +39,17 @@ type Status = {
   }[];
 };
 type Detail = {
+  officialData?: {
+    document: {
+      situacaoCompraNomePncp?: string;
+      dataAtualizacaoPncp?: string;
+      dataAberturaPropostaPncp?: string;
+      dataEncerramentoPropostaPncp?: string;
+    };
+    source_url: string;
+    fetched_at: string;
+  } | null;
+  officialHistory?: { fetched_at: string }[];
   messages: { id: string; body: string; kind: string; occurred_at: string }[];
   sessions: { id: string; status: string; source: string }[];
   deadlines: {
@@ -130,6 +142,16 @@ export function BackendPanel() {
     });
     if (!response.ok) {
       if (response.status === 401) setToken("");
+      let publicCode = "";
+      try {
+        const body = await response.json();
+        if (
+          typeof body.error === "string" &&
+          /^comprasgov_[a-z_]+$/.test(body.error)
+        )
+          publicCode = body.error;
+      } catch {}
+      if (publicCode) throw Error("Consulta oficial: " + publicCode);
       throw Error(
         response.status === 401
           ? "Sessão inválida ou credenciais incorretas."
@@ -193,7 +215,8 @@ export function BackendPanel() {
         <strong>Workspace do servidor</strong>
         <span>
           Separado da demonstração local. Cadastro manual não é dado verificado.
-          Nenhum conector oficial está homologado.
+          Consultas públicas do Compras.gov.br disponíveis por identificador;
+          chat e convocações não são coletados.
         </span>
       </section>
       {error && <p role="alert">{error}</p>}
@@ -579,6 +602,7 @@ export function BackendPanel() {
                 ))}
             </div>
           </section>
+          <ComprasgovPanel request={request} onImported={refresh} />
           <section className="panel info">
             <h2>Consulta oficial PNCP — sob demanda</h2>
             <p>
@@ -667,7 +691,8 @@ export function BackendPanel() {
               • Último heartbeat: {timestamp(status?.worker.heartbeatAt)}
             </p>
             <p>
-              Monitoramento de portais: <strong>não ativo</strong> • E-mail:{" "}
+              Mensagens e convocações de sessão:{" "}
+              <strong>não monitoradas</strong> • E-mail:{" "}
               {status?.providers.email || "aguardando"} • WhatsApp:{" "}
               {status?.providers.whatsapp || "aguardando"}
             </p>
@@ -753,7 +778,7 @@ export function BackendPanel() {
                     }
                   >
                     {p.source === "verified"
-                      ? "Verificado por conector autorizado"
+                      ? "Dados oficiais verificados"
                       : "Manual • não verificado"}
                   </span>
                   <p>
@@ -763,7 +788,9 @@ export function BackendPanel() {
                     Próxima tentativa: {timestamp(p.next_check_at)} •
                     Agendamento:{" "}
                     {p.monitoring_enabled
-                      ? "habilitado (conector pendente)"
+                      ? p.external_ref.startsWith("comprasgov:")
+                        ? "habilitado para dados públicos"
+                        : "habilitado, referência oficial pendente"
                       : "pausado"}
                   </p>
                 </div>
@@ -804,6 +831,45 @@ export function BackendPanel() {
                   {s.status} • {s.source}
                 </p>
               ))}
+              {detail.officialData && (
+                <>
+                  <h3>Dados públicos oficiais — Compras.gov.br</h3>
+                  <p>
+                    Situação publicada:{" "}
+                    {detail.officialData.document.situacaoCompraNomePncp ||
+                      "não informada"}
+                    <br />
+                    Atualização na fonte:{" "}
+                    {detail.officialData.document.dataAtualizacaoPncp ||
+                      "não informada"}
+                    <br />
+                    Última consulta: {timestamp(detail.officialData.fetched_at)}
+                  </p>
+                  <p>
+                    Propostas (datas originais, sem conversão de fuso):{" "}
+                    {detail.officialData.document.dataAberturaPropostaPncp ||
+                      "não informada"}{" "}
+                    até{" "}
+                    {detail.officialData.document
+                      .dataEncerramentoPropostaPncp || "não informada"}
+                  </p>
+                  <p>
+                    <a
+                      href={detail.officialData.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Abrir dados oficiais
+                    </a>{" "}
+                    • {detail.officialHistory?.length || 0} versões disponíveis
+                    (até 50)
+                  </p>
+                  <p>
+                    Este registro não representa acompanhamento do chat ou das
+                    convocações da sessão.
+                  </p>
+                </>
+              )}
               <h3>Mensagens e convocações verificadas</h3>
               {detail.messages.length === 0 ? (
                 <p>

@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  publicSnapshotSchema,
+  ComprasgovPublicConnector,
+} from "./comprasgov.js";
 export const portals = [
   "Comprasnet",
   "BLL",
@@ -9,6 +13,7 @@ export const portals = [
   "BBMNET",
 ] as const;
 export const collectedSchema = z.object({
+  publicSnapshot: publicSnapshotSchema.optional(),
   cursor: z.string().max(1000).optional(),
   sessions: z
     .array(
@@ -41,23 +46,28 @@ export const collectedSchema = z.object({
 export type Collected = z.infer<typeof collectedSchema>;
 export interface AuthorizedConnector {
   portal: (typeof portals)[number];
+  supportsReference?(value: string): boolean;
   collect(input: {
     externalRef: string;
     cursor?: string;
     signal: AbortSignal;
   }): Promise<Collected>;
 }
-// Intentionally empty. No endpoint, HTML scraping or login flow has been homologated.
+// Only the documented public data lookup is enabled, never session chat/login.
 export const productionConnectors: ReadonlyMap<string, AuthorizedConnector> =
-  new Map();
+  new Map([["Comprasnet", new ComprasgovPublicConnector()]]);
 export const portalStatus = portals.map((portal, index) => ({
   portal,
   priority: index + 1,
-  status: "pending_authorized_integration",
+  status:
+    portal === "Comprasnet"
+      ? "public_contract_data_available"
+      : "pending_authorized_integration",
+  scope: portal === "Comprasnet" ? "public_contract_data" : "not_configured",
   collectsMessages: false,
   collectsSummons: false,
   reason:
     portal === "Comprasnet"
-      ? "Dados abertos de contratações não equivalem ao chat das sessões. Interface de mensagens/convocações não homologada."
+      ? "Consulta oficial de dados públicos de contratações disponível por ID. Não coleta mensagens, convocações ou sessão ao vivo."
       : "Documentação e autorização de acesso ainda não validadas.",
 }));

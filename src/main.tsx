@@ -607,15 +607,20 @@ function App() {
                       <Plug size={22} />
                     </span>
                     <h2>{c.portal}</h2>
-                    <span className="badge neutral">Não configurado</span>
+                    <span className="badge neutral">
+                      {c.portal === "Comprasnet"
+                        ? "Dados públicos (Servidor)"
+                        : "Não configurado"}
+                    </span>
                     <p>
-                      Conector preparado para implementação mediante
-                      documentação oficial e acesso autorizado.
+                      {c.portal === "Comprasnet"
+                        ? "Conector oficial de dados públicos implementado. Consulte e importe contratações por identificador na área Servidor."
+                        : "Conector preparado para implementação mediante documentação oficial e acesso autorizado."}
                     </p>
                     <small>
-                      Autenticação, permissões, limites de consulta e condições
-                      de uso serão validados individualmente. Nenhuma credencial
-                      é solicitada neste protótipo.
+                      {c.portal === "Comprasnet"
+                        ? "Não inclui chat, mensagens ou convocações do pregoeiro. Nenhuma credencial de portal é solicitada para essa consulta pública."
+                        : "Autenticação, permissões, limites de consulta e condições de uso serão validados individualmente. Nenhuma credencial é solicitada neste protótipo."}
                     </small>
                   </section>
                 ))}

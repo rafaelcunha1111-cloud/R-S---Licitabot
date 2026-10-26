@@ -124,3 +124,7 @@ A configuração existente por refresh token no Render foi preservada, com novo 
 ## URL padrão do frontend
 
 O workflow de Pages usa `https://rs-licitabot-api.onrender.com` como URL pública padrão da API. A repository variable `VITE_API_URL`, se definida, tem prioridade para permitir trocar o backend. Não é necessário criá-la para usar o serviço atual. O endereço é incorporado no build; a publicação precisa concluir antes de o navegador receber a alteração. Nenhum segredo é incluído nessa variável.
+
+## Primeira fase Compras.gov.br
+
+O conector de dados públicos já foi implementado e validado com uma consulta real em desenvolvimento. As afirmações anteriores de ausência de coleta devem ser lidas como ausência de integração de chat/convocações/sessão ao vivo. Para importar dados públicos e optar pela verificação periódica no worker, aplicar migrations 006/007 e seguir [COMPRASGOV.md](COMPRASGOV.md). Nenhum cadastro manual é vinculado automaticamente. Essa entrega não confirma implantação ou monitoramento ativo no Render.

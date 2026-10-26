@@ -1,4 +1,11 @@
 import {
+  publicPurchaseSchema,
+  snapshotFingerprint,
+  COMPRASGOV_LOOKUP,
+  COMPRASGOV_ORIGIN,
+  ComprasgovError,
+} from "../src/comprasgov.js";
+import {
   authorizeGmail,
   completeGmailAuthorization,
   encryptSecret,
@@ -36,7 +43,7 @@ test(
     await migrate(pool);
     await migrate(pool);
     await pool.query(
-      "TRUNCATE users,auth_sessions,procurements,procurement_sessions,messages,deadlines,query_history,activity,notifications,delivery_receipts,worker_health CASCADE",
+      "TRUNCATE users,auth_sessions,procurements,procurement_sessions,messages,deadlines,query_history,activity,notifications,delivery_receipts,worker_health,portal_cooldowns CASCADE",
     );
     const user = (
       await pool.query(
@@ -52,7 +59,26 @@ test(
     ).rows[0].id;
     const token = await createSession(pool, user);
     const otherToken = await createSession(pool, other);
-    const server = createApp(pool, c).listen(0, "127.0.0.1");
+    const officialFixture = publicPurchaseSchema.parse({
+      idCompra: "17013105000172023",
+      numeroControlePNCP: "00394460000141-1-001631/2023",
+      orgaoEntidadeRazaoSocial: "Órgão fixture oficial",
+      objetoCompra: "Fixture pública em banco de teste",
+      situacaoCompraNomePncp: "Fixture A",
+    });
+    const publicFixture = () => ({
+      data: officialFixture,
+      sourceUrl:
+        COMPRASGOV_ORIGIN +
+        COMPRASGOV_LOOKUP +
+        "?tipo=idCompra&codigo=" +
+        officialFixture.idCompra,
+      fetchedAt: new Date().toISOString(),
+      fingerprint: snapshotFingerprint(officialFixture),
+    });
+    const server = createApp(pool, c, {
+      comprasgovFetch: async () => publicFixture(),
+    }).listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));
     const address = server.address() as { port: number };
     const url = "http://127.0.0.1:" + address.port;
@@ -183,7 +209,7 @@ test(
           ).rows[0];
           assert.equal(result.last_success_at, null);
           assert.equal(result.source, "manual");
-          assert.equal(result.last_error, "pending_authorized_integration");
+          assert.equal(result.last_error, "comprasgov_reference_required");
           assert.ok(
             new Date(result.next_check_at).getTime() > Date.now() + 290000,
           );
@@ -587,6 +613,215 @@ test(
           assert.equal(result.status, "pending_configuration");
           assert.equal(result.last_error, "gmail_pending_configuration");
           assert.equal(result.attempts, 0);
+        },
+      );
+      const publicToken = await createSession(pool, user);
+      let publicId: string;
+      await t.test(
+        "consulta/importação pública exige autenticação, persiste origem oficial e não cria chat ou prazos fictícios",
+        async () => {
+          assert.equal(
+            (
+              await fetch(
+                url +
+                  "/api/comprasgov/contract?type=idCompra&code=" +
+                  officialFixture.idCompra,
+              )
+            ).status,
+            401,
+          );
+          const body = {
+            lookup: { type: "idCompra", code: officialFixture.idCompra },
+            monitorPublic: true,
+          };
+          const preview = await request(
+            "/api/comprasgov/contract?type=idCompra&code=" +
+              officialFixture.idCompra,
+            "GET",
+            undefined,
+            publicToken,
+          );
+          assert.equal(preview.status, 200);
+          assert.equal((await preview.json()).collectsMessages, false);
+          const created = await request(
+            "/api/comprasgov/import",
+            "POST",
+            body,
+            publicToken,
+          );
+          assert.equal(created.status, 201);
+          const proc = await created.json();
+          publicId = proc.id;
+          assert.equal(proc.source, "verified");
+          assert.ok(proc.verified_at);
+          assert.equal(proc.monitoring_enabled, true);
+          assert.equal(
+            (await request("/api/comprasgov/import", "POST", body, publicToken))
+              .status,
+            409,
+          );
+          const detail = await request(
+            "/api/procurements/" + publicId,
+            "GET",
+            undefined,
+            publicToken,
+          );
+          const data = await detail.json();
+          assert.equal(
+            data.officialData.document.idCompra,
+            officialFixture.idCompra,
+          );
+          assert.equal(data.officialHistory.length, 1);
+          assert.equal(data.messages.length, 0);
+          assert.equal(data.sessions.length, 0);
+          assert.equal(data.deadlines.length, 0);
+          assert.equal(
+            (
+              await request(
+                "/api/procurements/" + publicId,
+                "GET",
+                undefined,
+                otherToken,
+              )
+            ).status,
+            404,
+          );
+        },
+      );
+      await t.test(
+        "worker salva alterações públicas com alerta distinto de mensagem e deduplica snapshots inalterados",
+        async () => {
+          await pool.query(
+            "UPDATE procurements SET monitoring_enabled=false WHERE id!=$1",
+            [publicId],
+          );
+          const adapters = new Map([
+            [
+              "Comprasnet",
+              {
+                portal: "Comprasnet" as const,
+                async collect() {
+                  return {
+                    sessions: [],
+                    messages: [],
+                    deadlines: [],
+                    publicSnapshot: publicFixture(),
+                  };
+                },
+              },
+            ],
+          ]);
+          async function tick() {
+            await pool.query(
+              "UPDATE procurements SET next_check_at=now() WHERE id=$1",
+              [publicId],
+            );
+            await schedulerTick(pool, adapters);
+          }
+          await tick();
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT count(*)::int AS n FROM comprasgov_observations WHERE procurement_id=$1",
+                [publicId],
+              )
+            ).rows[0].n,
+            1,
+          );
+          officialFixture.situacaoCompraNomePncp = "Fixture B";
+          await tick();
+          await tick();
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT count(*)::int AS n FROM comprasgov_observations WHERE procurement_id=$1",
+                [publicId],
+              )
+            ).rows[0].n,
+            2,
+          );
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT count(*)::int AS n FROM activity WHERE procurement_id=$1 AND kind='public_data_update'",
+                [publicId],
+              )
+            ).rows[0].n,
+            1,
+          );
+          assert.equal(
+            (
+              await pool.query(
+                "SELECT count(*)::int AS n FROM messages WHERE procurement_id=$1",
+                [publicId],
+              )
+            ).rows[0].n,
+            0,
+          );
+          const before = (
+            await pool.query(
+              "SELECT last_success_at FROM procurements WHERE id=$1",
+              [publicId],
+            )
+          ).rows[0].last_success_at.toISOString();
+          await pool.query(
+            "UPDATE procurements SET next_check_at=now() WHERE id=$1",
+            [publicId],
+          );
+          await schedulerTick(
+            pool,
+            new Map([
+              [
+                "Comprasnet",
+                {
+                  portal: "Comprasnet" as const,
+                  async collect() {
+                    throw new ComprasgovError("comprasgov_rate_limited", 1200);
+                  },
+                },
+              ],
+            ]),
+          );
+          const after = (
+            await pool.query("SELECT * FROM procurements WHERE id=$1", [
+              publicId,
+            ])
+          ).rows[0];
+          assert.equal(after.last_success_at.toISOString(), before);
+          assert.equal(after.last_error, "comprasgov_rate_limited");
+          assert.ok(
+            new Date(after.next_check_at).getTime() > Date.now() + 1190000,
+          );
+          await pool.query(
+            "UPDATE procurements SET next_check_at=now() WHERE id=$1",
+            [publicId],
+          );
+          let blockedCalls = 0;
+          await schedulerTick(
+            pool,
+            new Map([
+              [
+                "Comprasnet",
+                {
+                  portal: "Comprasnet" as const,
+                  async collect() {
+                    blockedCalls++;
+                    throw Error("must not call during cooldown");
+                  },
+                },
+              ],
+            ]),
+          );
+          assert.equal(blockedCalls, 0);
+          const blocked = await request(
+            "/api/comprasgov/contract?type=idCompra&code=" +
+              officialFixture.idCompra,
+            "GET",
+            undefined,
+            publicToken,
+          );
+          assert.equal(blocked.status, 429);
+          assert.ok(Number(blocked.headers.get("retry-after")) >= 300);
         },
       );
     } finally {

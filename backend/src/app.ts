@@ -1,4 +1,5 @@
 import express from "express";
+import { comprasgovRoutes } from "./comprasgov-routes.js";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -26,7 +27,11 @@ const procurementSchema = z
     object: z.string().trim().min(1).max(2000),
   })
   .strict();
-export function createApp(pool: pg.Pool, c: Config) {
+export function createApp(
+  pool: pg.Pool,
+  c: Config,
+  options: { comprasgovFetch?: Parameters<typeof comprasgovRoutes>[1] } = {},
+) {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -140,6 +145,7 @@ export function createApp(pool: pg.Pool, c: Config) {
     res.set("Cache-Control", "no-store");
     next();
   });
+  app.use("/api/comprasgov", comprasgovRoutes(pool, options.comprasgovFetch));
   app.use("/api/gmail", gmailRoutes(pool, c));
   app.post("/api/auth/logout", async (_req, res) => {
     await pool.query("DELETE FROM auth_sessions WHERE token_hash=$1", [
@@ -465,7 +471,22 @@ export function createApp(pool: pg.Pool, c: Config) {
           [id],
         ),
       ]);
+    const officialData =
+      (
+        await pool.query(
+          "SELECT document,source_url,fetched_at FROM comprasgov_current WHERE procurement_id=$1",
+          [id],
+        )
+      ).rows[0] || null;
+    const officialHistory = (
+      await pool.query(
+        "SELECT document,source_url,fetched_at FROM comprasgov_observations WHERE procurement_id=$1 ORDER BY fetched_at DESC LIMIT 50",
+        [id],
+      )
+    ).rows;
     res.json({
+      officialData,
+      officialHistory,
       procurement,
       sessions: sessions.rows,
       messages: messages.rows,

@@ -1,4 +1,6 @@
 import type pg from "pg";
+import { saveComprasgovSnapshot } from "./comprasgov-store.js";
+import { ComprasgovError, comprasgovFailure } from "./comprasgov.js";
 import { transaction } from "./db.js";
 import { recordActivity } from "./events.js";
 import {
@@ -24,7 +26,7 @@ export async function schedulerTick(
     );
     const due = (
       await lock.query(
-        "SELECT * FROM procurements WHERE monitoring_enabled AND next_check_at<=now() ORDER BY next_check_at LIMIT 20",
+        "SELECT p.* FROM procurements p WHERE monitoring_enabled AND next_check_at<=now() AND NOT EXISTS (SELECT 1 FROM portal_cooldowns pc WHERE pc.portal=p.portal AND pc.until_at>now()) ORDER BY next_check_at LIMIT 20",
       )
     ).rows;
     for (const procurement of due) {
@@ -35,22 +37,28 @@ export async function schedulerTick(
         )
       ).rows[0].id;
       const adapter = adapters.get(procurement.portal);
-      if (!adapter) {
+      const blockedCode = !adapter
+        ? "pending_authorized_integration"
+        : adapter.supportsReference &&
+            !adapter.supportsReference(procurement.external_ref)
+          ? "comprasgov_reference_required"
+          : null;
+      if (blockedCode) {
         await transaction(pool, async (c) => {
           await c.query(
-            "UPDATE procurements SET next_check_at=now()+interval '5 minutes',last_error='pending_authorized_integration' WHERE id=$1",
-            [procurement.id],
+            "UPDATE procurements SET next_check_at=now()+interval '5 minutes',last_error=$2 WHERE id=$1",
+            [procurement.id, blockedCode],
           );
           await c.query(
-            "UPDATE query_history SET status='blocked',finished_at=now(),error_code='pending_authorized_integration' WHERE id=$1",
-            [run],
+            "UPDATE query_history SET status='blocked',finished_at=now(),error_code=$2 WHERE id=$1",
+            [run, blockedCode],
           );
         });
         continue;
       }
       try {
         const data = collectedSchema.parse(
-          await adapter.collect({
+          await adapter!.collect({
             externalRef: procurement.external_ref,
             cursor: procurement.cursor || undefined,
             signal: AbortSignal.timeout(20000),
@@ -58,6 +66,11 @@ export async function schedulerTick(
         );
         await transaction(pool, async (c) => {
           let added = 0;
+          if (data.publicSnapshot) {
+            if (procurement.portal !== "Comprasnet")
+              throw Error("invalid_public_source");
+            await saveComprasgovSnapshot(c, procurement, data.publicSnapshot);
+          }
           for (const session of data.sessions)
             await c.query(
               `INSERT INTO procurement_sessions(procurement_id,external_id,status,source) VALUES($1,$2,$3,'verified') ON CONFLICT(procurement_id,external_id) DO UPDATE SET status=excluded.status,source='verified',observed_at=now()`,
@@ -104,22 +117,37 @@ export async function schedulerTick(
             [run, added],
           );
         });
-      } catch {
+      } catch (error) {
+        const failure =
+          error instanceof ComprasgovError ? comprasgovFailure(error) : null;
         await transaction(pool, async (c) => {
+          if (failure?.code === "comprasgov_rate_limited")
+            await c.query(
+              "INSERT INTO portal_cooldowns(portal,until_at) VALUES($1,now()+$2*interval '1 second') ON CONFLICT(portal) DO UPDATE SET until_at=GREATEST(portal_cooldowns.until_at,excluded.until_at)",
+              [procurement.portal, failure.retrySeconds],
+            );
           await c.query(
-            "UPDATE procurements SET last_error='collection_failed',consecutive_errors=consecutive_errors+1,next_check_at=now()+LEAST(3600,300*power(2,LEAST(consecutive_errors,4))) * interval '1 second' WHERE id=$1",
-            [procurement.id],
+            "UPDATE procurements SET last_error=$2,consecutive_errors=consecutive_errors+1,next_check_at=now()+GREATEST($3,LEAST(3600,300*power(2,LEAST(consecutive_errors,4)))) * interval '1 second' WHERE id=$1",
+            [
+              procurement.id,
+              failure?.code || "collection_failed",
+              failure?.retrySeconds || 300,
+            ],
           );
           await c.query(
-            "UPDATE query_history SET status='error',error_code='collection_failed',finished_at=now() WHERE id=$1",
-            [run],
+            "UPDATE query_history SET status='error',error_code=$2,finished_at=now() WHERE id=$1",
+            [run, failure?.code || "collection_failed"],
           );
         });
+        if (failure?.code === "comprasgov_rate_limited") break;
       }
     }
   } finally {
-    if (acquired) await lock.query("SELECT pg_advisory_unlock(8173402)");
-    lock.release();
+    try {
+      if (acquired) await lock.query("SELECT pg_advisory_unlock(8173402)");
+    } finally {
+      lock.release();
+    }
   }
 }
 export async function deadlineTick(pool: pg.Pool) {

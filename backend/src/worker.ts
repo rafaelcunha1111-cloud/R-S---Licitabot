@@ -21,7 +21,9 @@ await heartbeat();
 const timer = setInterval(() => {
   void heartbeat().catch(() => console.error("worker_heartbeat_failed"));
 }, 15000);
-console.log("Worker iniciado. Conectores de portais pendentes de homologação.");
+console.log(
+  "Worker iniciado. Dados públicos Compras.gov.br disponíveis; mensagens e convocações de sessão pendentes.",
+);
 console.info(
   "worker_email_configuration",
   JSON.stringify({
