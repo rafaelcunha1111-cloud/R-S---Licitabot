@@ -151,7 +151,10 @@ export function BackendPanel() {
         )
           publicCode = body.error;
       } catch {}
-      if (publicCode) throw Error("Consulta oficial: " + publicCode);
+      if (publicCode)
+        throw Object.assign(new Error("Consulta oficial: " + publicCode), {
+          code: publicCode,
+        });
       throw Error(
         response.status === 401
           ? "Sessão inválida ou credenciais incorretas."

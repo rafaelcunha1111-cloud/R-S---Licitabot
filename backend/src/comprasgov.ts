@@ -17,7 +17,10 @@ export const comprasgovLookupSchema = z.discriminatedUnion("type", [
     code: z
       .string()
       .trim()
-      .regex(/^\d{14}-1-\d{6}\/\d{4}$/),
+      .transform((value) =>
+        value.replace(/^(\d{14}-1-\d{6})-(\d{4})$/, "$1/$2"),
+      )
+      .pipe(z.string().regex(/^\d{14}-1-\d{6}\/\d{4}$/)),
   }),
 ]);
 export type ComprasgovLookup = z.infer<typeof comprasgovLookupSchema>;

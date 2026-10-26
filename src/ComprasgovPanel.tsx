@@ -1,3 +1,9 @@
+import {
+  normalizePncpControl,
+  pncpLocation,
+  pncpPreview,
+  comprasgovErrorMessage,
+} from "./comprasgov-lookup";
 import { useState } from "react";
 type RecordData = {
   contratacaoExcluida?: boolean;
@@ -26,17 +32,24 @@ export function ComprasgovPanel({
   const [monitor, setMonitor] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [notFound, setNotFound] = useState(false);
+  const [pncp, setPncp] = useState<ReturnType<typeof pncpPreview>>();
+  const location =
+    lookup?.type === "numeroControlePNCPCompra"
+      ? pncpLocation(lookup.code)
+      : undefined;
   async function act(fn: () => Promise<void>) {
     setBusy(true);
     setMessage("");
     try {
       await fn();
     } catch (e) {
-      setMessage(
-        e instanceof Error
-          ? e.message
-          : "Consulta oficial indisponível. Nenhum registro foi importado.",
-      );
+      const failure = comprasgovErrorMessage(e);
+      if (failure.code === "comprasgov_not_found") {
+        setNotFound(true);
+        setResult(undefined);
+      }
+      setMessage(failure.message);
     } finally {
       setBusy(false);
     }
@@ -56,10 +69,12 @@ export function ComprasgovPanel({
           const f = new FormData(e.currentTarget);
           const input = {
             type: String(f.get("type")),
-            code: String(f.get("code")).trim(),
+            code: normalizePncpControl(String(f.get("code"))),
           };
           setResult(undefined);
-          setLookup(undefined);
+          setLookup(input);
+          setNotFound(false);
+          setPncp(undefined);
           void act(async () => {
             const data = await request(
               "/api/comprasgov/contract?" + new URLSearchParams(input),
@@ -93,6 +108,94 @@ export function ComprasgovPanel({
           Consultar na API oficial
         </button>
       </form>
+      {notFound && location && (
+        <div className="demo-banner">
+          <div>
+            <strong>Consulte a outra fonte oficial</strong>
+            <p>
+              O PNCP reúne publicações de diferentes plataformas. Um resultado
+              lá não será tratado como registro do Compras.gov.br.
+            </p>
+            <button
+              className="outline"
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  setPncp(undefined);
+                  const response = await request(
+                    `/api/pncp/contratacao/${location.cnpj}/${location.year}/${location.sequence}?only=procurement`,
+                  );
+                  const status = response.procurement?.status;
+                  if (status === 404 || status === 204) {
+                    setMessage(
+                      "A consulta ao PNCP também não retornou um registro. Confira o identificador no edital original.",
+                    );
+                    return;
+                  }
+                  if (status !== 200) {
+                    setMessage(
+                      "Não foi possível confirmar o registro no PNCP. A fonte pode estar indisponível ou ter recusado o acesso.",
+                    );
+                    return;
+                  }
+                  const found = pncpPreview(
+                    response.procurement.data,
+                    location.control,
+                  );
+                  if (!found) {
+                    setMessage(
+                      "A resposta do PNCP não permitiu confirmar o identificador solicitado. Nenhum dado foi importado.",
+                    );
+                    return;
+                  }
+                  setPncp(found);
+                  setMessage(
+                    "Registro encontrado no PNCP, fonte distinta da base Compras.gov.br. Nenhum monitoramento foi ativado.",
+                  );
+                })
+              }
+            >
+              Consultar este número no PNCP
+            </button>
+            <p>
+              <a
+                href={location.publicUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Abrir publicação no site do PNCP
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
+      {pncp && location && (
+        <div className="panel info">
+          <h3>Fonte: PNCP — consulta sob demanda</h3>
+          <p>Número confirmado: {pncp.control}</p>
+          {pncp.agency && <p>Órgão: {pncp.agency}</p>}
+          {pncp.object && <p>{pncp.object}</p>}
+          {pncp.publisher && (
+            <p>Publicador informado pelo PNCP: {pncp.publisher}</p>
+          )}
+          {pncp.status && <p>Situação publicada: {pncp.status}</p>}
+          {pncp.originUrl && (
+            <p>
+              <a
+                href={pncp.originUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Abrir sistema de origem informado pelo PNCP
+              </a>
+            </p>
+          )}
+          <p>
+            Não importado e não incluído no monitoramento do Compras.gov.br.
+            Chat e convocações continuam fora desta consulta.
+          </p>
+        </div>
+      )}
       {result && lookup && (
         <>
           <h3>{result.data.orgaoEntidadeRazaoSocial}</h3>

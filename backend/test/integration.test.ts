@@ -76,8 +76,23 @@ test(
       fetchedAt: new Date().toISOString(),
       fingerprint: snapshotFingerprint(officialFixture),
     });
+    const pncpCalls: string[] = [];
     const server = createApp(pool, c, {
       comprasgovFetch: async () => publicFixture(),
+      pncpFetch: async (input, init) => {
+        const target = new URL(String(input));
+        pncpCalls.push(target.toString());
+        assert.equal(target.origin, "https://pncp.gov.br");
+        assert.equal(init?.redirect, "error");
+        return new Response(
+          JSON.stringify({
+            numeroControlePNCP: "00394684000153-1-000148/2026",
+            objetoCompra: "Fixture pública PNCP, não é dado real",
+            orgaoEntidade: { razaoSocial: "Órgão fixture" },
+            linkSistemaOrigem: "https://source.example.invalid",
+          }),
+        );
+      },
     }).listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server.once("listening", resolve));
     const address = server.address() as { port: number };
@@ -822,6 +837,38 @@ test(
           );
           assert.equal(blocked.status, 429);
           assert.ok(Number(blocked.headers.get("retry-after")) >= 300);
+        },
+      );
+      await t.test(
+        "PNCP aceita CNPJ numérico válido, preserva autenticação e consulta apenas contratação quando solicitado",
+        async () => {
+          const path =
+            "/api/pncp/contratacao/00394684000153/2026/148?only=procurement";
+          assert.equal((await fetch(url + path)).status, 401);
+          assert.equal(pncpCalls.length, 0);
+          const response = await request(path, "GET", undefined, publicToken);
+          assert.equal(response.status, 200);
+          const body = await response.json();
+          assert.equal(body.source, "PNCP");
+          assert.equal(body.procurement.status, 200);
+          assert.equal(
+            body.procurement.data.numeroControlePNCP,
+            "00394684000153-1-000148/2026",
+          );
+          assert.equal(body.contracts, null);
+          assert.equal(pncpCalls.length, 1);
+          assert.equal(
+            pncpCalls[0],
+            "https://pncp.gov.br/api/pncp/v1/orgaos/00394684000153/compras/2026/148",
+          );
+          const invalid = await request(
+            "/api/pncp/contratacao/not-a-cnpj/2026/148?only=procurement",
+            "GET",
+            undefined,
+            publicToken,
+          );
+          assert.equal(invalid.status, 400);
+          assert.equal(pncpCalls.length, 1);
         },
       );
     } finally {

@@ -70,3 +70,11 @@ Endpoints próprios, todos protegidos por autenticação do LicitaBot:
 Validar no Render uma referência real escolhida pelo usuário, origem/situação, persistência após recarga e tentativas no worker. Não fabricar uma mudança na fonte para produzir e-mail. Os testes offline exercitam a detecção de alteração e sua deduplicação. Envio Gmail já validado em etapa anterior não comprova consulta a dados oficiais nesta nova versão.
 
 Se o serviço público passar a exigir autenticação, retornar 403 ou mudar o contrato, a aplicação registra erro explícito; não tenta contornar nem solicita senha do portal por chat. O próximo escopo de chat/convocações requer documentação e autorização próprias.
+
+## Identificador válido e nenhum resultado
+
+O número de controle PNCP pode existir no Portal Nacional sem estar presente na base do módulo Compras.gov.br consultado. A aplicação não pode concluir inexistência da licitação, plataforma de origem ou erro do usuário a partir de `resultado: []`. O painel agora explica essa distinção e oferece **Consultar este número no PNCP** como consulta separada, somente leitura. A resposta exige o mesmo número de controle antes de exibir dados e identifica fonte/publicador/link HTTPS de origem quando informados. Não importa o registro como Compras.gov.br e não ativa monitoramento de outro portal.
+
+A rota PNCP existente tinha uma expressão regular incorreta (`\\d` literal em vez de dígitos) que rejeitava CNPJ válido. A validação foi corrigida e coberta por teste HTTP. O parâmetro opcional `only=procurement` evita a consulta adicional de contratos nessa operação; o comportamento anterior completo continua disponível para os outros fluxos. O endpoint continua autenticado, com host fixo, timeout, limite de requisições e redirecionamentos recusados.
+
+A interface aceita a variante copiada com hífen antes do ano e a normaliza para a barra PNCP; não altera CNPJ, ano ou sequência. A consulta real ao domínio PNCP a partir deste ambiente continuou bloqueada pelo proxy nesta correção. Os testes dessa rota e da interface usam respostas identificadas como fixtures; ainda é necessário conferir o registro escolhido no ambiente Render/PNCP. Não foi afirmado que os números informados pelo usuário existam no PNCP.
