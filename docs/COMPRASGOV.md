@@ -101,3 +101,24 @@ A pesquisa agora inicia com o ano de publicação inteiro, editável. As datas s
 as de publicação, não de abertura da sessão. Em resposta vazia, o usuário pode
 ampliar explicitamente para o ano inteiro ou retirar o filtro de número. Essas
 ações não substituem 72 por 90072 e não confirmam um registro ausente.
+
+### Link público de acompanhamento: cadastro, sem coletor de sessão
+
+O painel aceita somente o caminho público de acompanhamento em
+`https://cnetmobile.estaleiro.serpro.gov.br/comprasnet-web/public/compras/acompanhamento-compra?compra=…`.
+Extrai o ID de 17 dígitos, sem declarar existência ou conteúdo verificado.
+Credenciais na URL, hosts externos, IDs duplicados e fragmentos são recusados;
+parâmetros extras não são guardados. A consulta é feita à API de Dados Abertos
+existente, não a endpoints internos descobertos no navegador.
+
+Se a base não encontrar o ID, o usuário pode cadastrar explicitamente o link,
+órgão e objeto pelo fluxo manual autenticado existente. O backend grava
+`source=manual` e `monitoring_enabled=false`. O link pode ser aberto pelo usuário;
+isso não coleta sessões nem confirma mensagens. Prazos continuam manuais.
+
+Para o ID `16010205000722026`, a consulta oficial por ID retornou zero registros
+em 26/10/2026. O acesso à página SERPRO recebeu HTTP 403 neste ambiente. Isso não
+comprova bloqueio ao usuário ou inexistência da compra. Nenhum endpoint de chat
+foi validado no contrato público utilizado. A implantação de um coletor de sessão
+continua bloqueada pela falta de documentação e acesso oficialmente autorizados;
+não há automação de login, reaproveitamento de cookies nem contorno do 403.

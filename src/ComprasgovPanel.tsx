@@ -1,3 +1,4 @@
+import { ComprasgovSessionLink } from "./ComprasgovSessionLink";
 import { ComprasgovSearch } from "./ComprasgovSearch";
 import {
   normalizePncpControl,
@@ -64,6 +65,7 @@ export function ComprasgovPanel({
         referência deve vir do registro oficial, não do nome de uma pasta do
         Drive.
       </p>
+      <ComprasgovSessionLink request={request} onImported={onImported} />
       <ComprasgovSearch request={request} disabled={busy} onSelect={(id) => {
         setResult(undefined); setNotFound(false); setPncp(undefined); setMonitor(false);
         const input = {type:"idCompra",code:id}; setLookup(input);

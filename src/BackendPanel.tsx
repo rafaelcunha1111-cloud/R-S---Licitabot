@@ -1,3 +1,4 @@
+import { comprasgovSessionLink } from "./comprasgov-session-link";
 import { ComprasgovPanel } from "./ComprasgovPanel";
 import { GmailSettings } from "./GmailSettings";
 import driveFolders2026 from "../imports/drive-licitacoes-2026.json";
@@ -775,6 +776,10 @@ export function BackendPanel() {
                   <p>
                     {p.portal} • {p.object}
                   </p>
+                  {p.portal === "Comprasnet" && comprasgovSessionLink(p.external_ref) && <p>
+                    <a href={comprasgovSessionLink(p.external_ref)!.url} target="_blank" rel="noopener noreferrer">Abrir acompanhamento público</a>
+                    <br/>Leitura da sessão e mensagens: integração autorizada pendente.
+                  </p>}
                   <span
                     className={
                       "badge " + (p.source === "verified" ? "green" : "neutral")
