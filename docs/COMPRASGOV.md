@@ -122,3 +122,10 @@ comprova bloqueio ao usuário ou inexistência da compra. Nenhum endpoint de cha
 foi validado no contrato público utilizado. A implantação de um coletor de sessão
 continua bloqueada pela falta de documentação e acesso oficialmente autorizados;
 não há automação de login, reaproveitamento de cookies nem contorno do 403.
+
+## Solicitação de acesso a sessões
+
+O canal oficial confirmado e o texto pronto para atendimento estão em
+[SOLICITACAO-ACESSO-COMPRASGOV.md](SOLICITACAO-ACESSO-COMPRASGOV.md).
+Preparar esse documento não abre chamado nem concede acesso. O monitoramento
+de mensagens e convocações permanece pendente até resposta e validação reais.
