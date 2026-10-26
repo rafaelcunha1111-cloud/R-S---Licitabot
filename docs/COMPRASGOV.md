@@ -78,3 +78,21 @@ O número de controle PNCP pode existir no Portal Nacional sem estar presente na
 A rota PNCP existente tinha uma expressão regular incorreta (`\\d` literal em vez de dígitos) que rejeitava CNPJ válido. A validação foi corrigida e coberta por teste HTTP. O parâmetro opcional `only=procurement` evita a consulta adicional de contratos nessa operação; o comportamento anterior completo continua disponível para os outros fluxos. O endpoint continua autenticado, com host fixo, timeout, limite de requisições e redirecionamentos recusados.
 
 A interface aceita a variante copiada com hífen antes do ano e a normaliza para a barra PNCP; não altera CNPJ, ano ou sequência. A consulta real ao domínio PNCP a partir deste ambiente continuou bloqueada pelo proxy nesta correção. Os testes dessa rota e da interface usam respostas identificadas como fixtures; ainda é necessário conferir o registro escolhido no ambiente Render/PNCP. Não foi afirmado que os números informados pelo usuário existam no PNCP.
+
+### Pesquisa por UASG e número
+
+O formulário principal pesquisa a operação oficial documentada
+`/modulo-contratacoes/1_consultarContratacoes_PNCP_14133`, com UASG de seis
+algarismos, modalidade (Pregão código 5 ou Dispensa código 6), datas de publicação
+obrigatórias e paginação de dez registros. O período é limitado localmente a 366
+dias. O número da compra, sem ano, é um filtro local da página retornada, pois a
+operação não documenta esse parâmetro. Totais são da fonte antes desse filtro;
+é necessário avançar páginas para conferir os demais registros. Não há varredura
+ilimitada ou consultas paralelas. A rota autenticada `/api/comprasgov/search`
+compartilha trava, rate limit e cooldown com as consultas existentes.
+
+Selecionar um resultado faz nova consulta oficial por ID antes da importação.
+O ano aparece quando informado pela fonte. A consulta avançada PNCP permanece
+recolhida. Não há filtros fictícios de participação da empresa, etapa em disputa,
+ME/EPP ou chat: a API usada não fornece a mesma pesquisa de sessões autenticadas
+da captura de tela. Nenhuma credencial de portal é solicitada.

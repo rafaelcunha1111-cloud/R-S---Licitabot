@@ -1,3 +1,4 @@
+import { ComprasgovSearch } from "./ComprasgovSearch";
 import {
   normalizePncpControl,
   pncpLocation,
@@ -63,6 +64,12 @@ export function ComprasgovPanel({
         referência deve vir do registro oficial, não do nome de uma pasta do
         Drive.
       </p>
+      <ComprasgovSearch request={request} disabled={busy} onSelect={(id) => {
+        setResult(undefined); setNotFound(false); setPncp(undefined); setMonitor(false);
+        const input = {type:"idCompra",code:id}; setLookup(input);
+        void act(async()=>{setResult(await request("/api/comprasgov/contract?"+new URLSearchParams(input)));});
+      }} />
+      <details><summary>Consulta avançada por identificador PNCP ou ID</summary>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -108,6 +115,7 @@ export function ComprasgovPanel({
           Consultar na API oficial
         </button>
       </form>
+      </details>
       {notFound && location && (
         <div className="demo-banner">
           <div>

@@ -30,6 +30,7 @@ export const publicPurchaseSchema = z.object({
   orgaoEntidadeRazaoSocial: z.string().min(1).max(1000),
   objetoCompra: z.string().min(1).max(30000),
   unidadeOrgaoCodigoUnidade: z.string().max(100).nullable().optional(),
+  anoCompraPncp: z.number().int().nullable().optional(),
   numeroCompra: z.string().max(100).nullable().optional(),
   modalidadeNome: z.string().max(500).nullable().optional(),
   situacaoCompraNomePncp: z.string().max(500).nullable().optional(),

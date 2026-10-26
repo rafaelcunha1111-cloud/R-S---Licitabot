@@ -15,7 +15,7 @@
     "url": "https://dadosabertos.compras.gov.br/v3/api-docs",
     "retrievedAt": "2026-10-26T03:53:14.996019+00:00",
     "fullSpecificationSha256": "5386cf3a4f577397dcd9da282ed3a97c47b413282678a48f2eb14b80a3822167",
-    "scope": "Only the read-only public purchase lookup operation is included."
+    "scope": "Read-only public purchase lookup and paginated search operations."
   },
   "paths": {
     "/modulo-contratacoes/1.1_consultarContratacoes_PNCP_14133_Id": {
@@ -53,6 +53,148 @@
             "schema": {
               "type": "string",
               "description": "YYYY-MM-DD"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericAPIResponseDTOVwFtPNCPCompraDTO"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/modulo-contratacoes/1_consultarContratacoes_PNCP_14133": {
+      "get": {
+        "tags": [
+          "07 - CONTRATAÇÕES"
+        ],
+        "operationId": "consultarContratacoes_PNCP_14133",
+        "parameters": [
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "tamanhoPagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10,
+              "maximum": 500,
+              "minimum": 10
+            }
+          },
+          {
+            "name": "unidadeOrgaoCodigoUnidade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "codigoOrgao",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "orgaoEntidadeCnpj",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dataPublicacaoPncpInicial",
+            "in": "query",
+            "description": "YYYY-MM-DD",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "YYYY-MM-DD"
+            }
+          },
+          {
+            "name": "dataPublicacaoPncpFinal",
+            "in": "query",
+            "description": "YYYY-MM-DD",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "YYYY-MM-DD"
+            }
+          },
+          {
+            "name": "codigoModalidade",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "unidadeOrgaoCodigoIbge",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "unidadeOrgaoUfSigla",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dataAualizacaoPncp",
+            "in": "query",
+            "description": "YYYY-MM-DD",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "YYYY-MM-DD"
+            }
+          },
+          {
+            "name": "amparoLegalCodigoPncp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "contratacaoExcluida",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],

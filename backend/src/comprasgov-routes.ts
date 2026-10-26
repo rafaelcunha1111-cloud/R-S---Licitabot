@@ -1,3 +1,4 @@
+import { searchSchema, searchComprasgov } from "./comprasgov-search.js";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -73,6 +74,17 @@ export function comprasgovRoutes(
       }
     }
   }
+  router.get("/search", async (req, res, next) => {
+    try {
+      const input = searchSchema.parse(req.query);
+      res.json(await withLock(() => searchComprasgov(input)));
+    } catch (error) {
+      if (error instanceof z.ZodError) return next(error);
+      const failure = comprasgovFailure(error);
+      if (failure.code === "comprasgov_rate_limited") res.set("Retry-After", String(failure.retrySeconds));
+      res.status(failure.code === "comprasgov_rate_limited" ? 429 : 502).json({error:failure.code});
+    }
+  });
   router.get("/contract", async (req, res, next) => {
     try {
       const lookup = comprasgovLookupSchema.parse(req.query);
