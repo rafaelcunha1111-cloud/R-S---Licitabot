@@ -81,3 +81,11 @@ O callback agora mostra somente um código seguro e uma orientação específica
 | `oauth_state_storage_failed` ou `oauth_token_storage_failed`        | Verificar migrations e conexão PostgreSQL.                                                                                                       |
 
 A seção Gmail do painel mostra os nomes das variáveis OAuth ausentes, sem seus valores, e bloqueia a preparação enquanto a configuração estiver incompleta. Essa melhoria de diagnóstico não confirma a causa de uma falha anterior nem conclui autorização/envio real automaticamente. Fazer deploy da API para obter o novo código antes de repetir o fluxo.
+
+## Teste direto chega, mas alertas do worker ficam pendentes
+
+`pending_configuration • provider_not_configured` indica bloqueio no transporte selecionado pelo worker, não ausência do prazo. O teste direto executa na API; por isso não confirma as variáveis do Background Worker. Conferir **rs-licitabot-worker → Environment**: `EMAIL_PROVIDER=gmail`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_SENDER_EMAIL` e a mesma `GMAIL_TOKEN_ENCRYPTION_KEY` da API, além do mesmo banco que contém a autorização OAuth. Manter `WHATSAPP_ENABLED=false`. Não gerar outra chave.
+
+Os logs de início agora incluem `worker_email_configuration`, com nome do provedor e apenas indicadores booleanos de presença das configurações. Nenhum valor secreto é exibido. As notificações no painel também mostram o provedor efetivamente selecionado. Se aparecer `provider=resend`, o worker não está configurado para o Gmail pretendido; se aparecer `gmail_key_mismatch`, a chave difere daquela que criptografou o token na API.
+
+A fila acompanha uma mudança de provedor **somente** para notificações em `pending_configuration/provider_not_configured`, com zero tentativas efetivas e sem ID do provedor ou aceitação registrada. Isso recupera jobs criados antes da configuração Gmail. Notificações já tentadas, aceitas, com resultado desconhecido ou outros erros mantêm o provedor original; não são reenviadas cegamente. Após salvar configuração e fazer deploy do worker, jobs pendentes são reavaliados no horário agendado (normalmente até cinco minutos para falta de configuração). Não criar prazos adicionais para tentar forçar o envio.

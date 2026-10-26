@@ -528,7 +528,7 @@ export function createApp(pool: pg.Pool, c: Config) {
     res.json(
       (
         await pool.query(
-          "SELECT n.id,n.channel,n.status,n.attempts,n.last_error,n.accepted_at,n.delivered_at,n.read_at,a.title,a.body,a.source,a.procurement_id FROM notifications n JOIN activity a ON a.id=n.activity_id WHERE n.user_id=$1 ORDER BY n.created_at DESC LIMIT 200",
+          "SELECT n.id,n.channel,n.provider,n.status,n.attempts,n.last_error,n.accepted_at,n.delivered_at,n.read_at,a.title,a.body,a.source,a.procurement_id FROM notifications n JOIN activity a ON a.id=n.activity_id WHERE n.user_id=$1 ORDER BY n.created_at DESC LIMIT 200",
           [res.locals.userId],
         )
       ).rows,

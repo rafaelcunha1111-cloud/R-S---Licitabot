@@ -15,6 +15,7 @@ type Procurement = {
   next_check_at: string;
 };
 type Notice = {
+  provider?: string | null;
   id: string;
   title: string;
   body: string;
@@ -943,8 +944,9 @@ export function BackendPanel() {
                   <h3>{n.title}</h3>
                   <p>{n.body}</p>
                   <small>
-                    {n.source} • {n.channel} • {n.status}{" "}
-                    {n.last_error && `• ${n.last_error}`}
+                    {n.source} • {n.channel} •{" "}
+                    {n.provider || "provedor ainda não selecionado"} •{" "}
+                    {n.status} {n.last_error && `• ${n.last_error}`}
                   </small>
                 </div>
                 {n.channel === "panel" && !n.read_at && (

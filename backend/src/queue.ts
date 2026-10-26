@@ -7,6 +7,30 @@ import {
   type Delivery,
   type SendResult,
 } from "./providers.js";
+type PendingJob = {
+  channel: string;
+  provider?: "gmail" | "resend" | "whatsapp" | null;
+  status: string;
+  attempts: number;
+  last_error?: string | null;
+  accepted_at?: unknown;
+  provider_id?: string | null;
+};
+export function notificationProvider(
+  row: PendingJob,
+  c: Config,
+): "gmail" | "resend" | "whatsapp" {
+  if (row.channel !== "email") return "whatsapp";
+  const selected = emailProvider(c);
+  // Only untouched jobs blocked before any send may follow a provider configuration change.
+  const canRebind =
+    row.status === "pending_configuration" &&
+    row.last_error === "provider_not_configured" &&
+    row.attempts === 0 &&
+    !row.accepted_at &&
+    !row.provider_id;
+  return canRebind ? selected : row.provider || selected;
+}
 export async function dispatchOne(
   pool: pg.Pool,
   c: Config,
@@ -38,8 +62,9 @@ export async function dispatchOne(
       );
       return;
     }
+    const provider = notificationProvider(row, c);
     if (
-      (row.provider || emailProvider(c)) === "resend" &&
+      provider === "resend" &&
       row.channel === "email" &&
       row.attempts > 0 &&
       Date.now() - new Date(row.created_at).getTime() > 23 * 3600000
@@ -51,14 +76,12 @@ export async function dispatchOne(
       return;
     }
     await db.query(
-      "UPDATE notifications SET status='processing',locked_at=now(),attempts=attempts+1,provider=COALESCE(provider,$2) WHERE id=$1",
-      [row.id, row.channel === "email" ? emailProvider(c) : "whatsapp"],
+      "UPDATE notifications SET status='processing',locked_at=now(),attempts=attempts+1,provider=$2 WHERE id=$1",
+      [row.id, provider],
     );
     return {
       ...row,
-      provider:
-        row.provider ||
-        (row.channel === "email" ? emailProvider(c) : "whatsapp"),
+      provider,
     };
   });
   if (!job) return false;

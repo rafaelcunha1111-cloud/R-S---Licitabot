@@ -1,4 +1,4 @@
-import { readConfig } from "./config.js";
+import { emailProvider, readConfig } from "./config.js";
 import { createPool } from "./db.js";
 import { schedulerTick, deadlineTick } from "./scheduler.js";
 import { dispatchOne } from "./queue.js";
@@ -22,6 +22,17 @@ const timer = setInterval(() => {
   void heartbeat().catch(() => console.error("worker_heartbeat_failed"));
 }, 15000);
 console.log("Worker iniciado. Conectores de portais pendentes de homologação.");
+console.info(
+  "worker_email_configuration",
+  JSON.stringify({
+    provider: emailProvider(c),
+    gmailClientIdConfigured: Boolean(c.GMAIL_CLIENT_ID),
+    gmailClientSecretConfigured: Boolean(c.GMAIL_CLIENT_SECRET),
+    gmailEncryptionKeyConfigured: Boolean(c.GMAIL_TOKEN_ENCRYPTION_KEY),
+    gmailEnvironmentRefreshTokenConfigured: Boolean(c.GMAIL_REFRESH_TOKEN),
+    whatsappEnabled: c.WHATSAPP_ENABLED,
+  }),
+);
 while (!stopping) {
   try {
     await schedulerTick(pool);

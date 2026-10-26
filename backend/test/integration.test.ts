@@ -566,6 +566,29 @@ test(
           );
         },
       );
+      await t.test(
+        "fila pendente sem provedor acompanha Gmail sem reenviar tentativas antigas",
+        async () => {
+          await pool.query(
+            "UPDATE notifications SET status='failed' WHERE channel='email'",
+          );
+          const row = (
+            await pool.query(
+              "UPDATE notifications SET status='pending_configuration',provider='resend',attempts=0,provider_id=NULL,accepted_at=NULL,last_error='provider_not_configured',next_attempt_at=now() WHERE id=(SELECT id FROM notifications WHERE channel='email' LIMIT 1) RETURNING id",
+            )
+          ).rows[0];
+          await dispatchOne(pool, { ...c, EMAIL_PROVIDER: "gmail" });
+          const result = (
+            await pool.query("SELECT * FROM notifications WHERE id=$1", [
+              row.id,
+            ])
+          ).rows[0];
+          assert.equal(result.provider, "gmail");
+          assert.equal(result.status, "pending_configuration");
+          assert.equal(result.last_error, "gmail_pending_configuration");
+          assert.equal(result.attempts, 0);
+        },
+      );
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await pool.end();
